@@ -22,9 +22,9 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # %% [code] {"id":"xVXC_q2ekuf8","papermill":{"duration":0.079089,"end_time":"2021-10-09T06:31:24.988503","exception":false,"start_time":"2021-10-09T06:31:24.909414","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:17.864024Z","iopub.execute_input":"2025-10-29T08:47:17.864499Z","iopub.status.idle":"2025-10-29T08:47:17.926536Z","shell.execute_reply.started":"2025-10-29T08:47:17.864478Z","shell.execute_reply":"2025-10-29T08:47:17.925750Z"},"jupyter":{"outputs_hidden":false}}
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-batch_size = 128  # DCGAN recommended batch size
+batch_size = 16  # DCGAN recommended batch size
 learning_rate = 0.0002  # DCGAN recommended learning rate
-num_epochs = 200  # Training epochs
+num_epochs = 1000  # Training epochs
 image_size = 64  # Image size (64x64)
 latent_dim = 100  # Latent vector dimension (DCGAN standard)
 nc = 1  # Number of channels (1 for grayscale, 3 for RGB)
@@ -286,78 +286,6 @@ class Generator(nn.Module):
 
     def forward(self, input):
         return self.main(input)    
-        
-# class ResidualBlock(nn.Module):
-#     def __init__(self, in_channels, out_channels):
-#         super(ResidualBlock, self).__init__()
-#         # 主路径：上采样 + 卷积块
-#         self.block = nn.Sequential(
-#             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),  # 上采样
-#             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
-#             nn.BatchNorm2d(out_channels),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False),
-#             nn.BatchNorm2d(out_channels)
-#         )
-#         # 跳跃连接：直接上采样 + 1x1 卷积
-#         self.shortcut = nn.Sequential(
-#             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-#             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False),
-#             nn.BatchNorm2d(out_channels)
-#         )
-
-#     def forward(self, x):
-#         shortcut = self.shortcut(x)  # 跳跃连接
-#         block_output = self.block(x)  # 主路径
-#         return F.relu(block_output + shortcut, inplace=True)  # 输出
-
-# class Generator(nn.Module):
-#     """
-#     基于 ResNet 的生成器，生成分辨率为 64x64 的图像。
-#     """
-#     def __init__(self, latent_dim=128):
-#         super(Generator, self).__init__()
-#         # 初始映射层
-#         self.initial = nn.Sequential(
-#             nn.ConvTranspose2d(latent_dim, 512, kernel_size=4, stride=1, padding=0, bias=False),
-#             nn.BatchNorm2d(512),
-#             nn.ReLU(True)
-#         )
-#         # 残差块
-#         self.res_blocks = nn.Sequential(
-#             ResidualBlock(512, 256),  # 4x4 -> 8x8
-#             ResidualBlock(256, 128),  # 8x8 -> 16x16
-#             ResidualBlock(128, 64)   # 16x16 -> 32x32
-#         )
-#         # 输出层
-#         self.final_conv = nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1, bias=False)  # 32x32 -> 64x64
-#         self.final_activation = nn.Tanh()
-
-#     def forward(self, z):
-#         x = self.initial(z)
-#         x = self.res_blocks(x)
-#         x = self.final_conv(x)
-#         x = self.final_activation(x)
-#         return x
-# class Generator(nn.Module):
-#     def __init__(self, latent_dim):
-#         super(Generator, self).__init__()
-#         self.main = nn.Sequential(
-#             # 输入: latent_dim x 1 x 1 -> 64 * 8 x 4 x 4
-#             nn.ConvTranspose2d(latent_dim, 64 * 8, 4, 1, 0, bias=False),
-#             nn.BatchNorm2d(64 * 8),
-#             nn.ReLU(True),
-#             # 64 * 8 x 4 x 4 -> 64 * 4 x 8 x 8
-#             nn.ConvTranspose2d(64 * 8, 64 * 4, 4, 2, 1, bias=False),
-#             nn.BatchNorm2d(64 * 4),
-#             nn.ReLU(True),
-#             # 64 * 4 x 8 x 8 -> 64 * 2 x 16 x 16
-#             nn.ConvTranspose2d(64 * 4, 1, 4, 2, 1, bias=False),
-#             nn.Tanh()  # 将输出归一化到 [-1, 1]
-#         )
-
-#     def forward(self, input):
-#         return self.main(input)
 
 # %% [code] {"papermill":{"duration":3.374826,"end_time":"2021-10-09T06:31:43.061517","exception":false,"start_time":"2021-10-09T06:31:39.686691","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:20.829310Z","iopub.execute_input":"2025-10-29T08:47:20.829587Z","iopub.status.idle":"2025-10-29T08:47:21.082683Z","shell.execute_reply.started":"2025-10-29T08:47:20.829566Z","shell.execute_reply":"2025-10-29T08:47:21.081948Z"},"jupyter":{"outputs_hidden":false}}
 generator = Generator().to(device)
@@ -455,6 +383,10 @@ D_losses = []
 img_list = []
 iters = 0
 
+# FID tracking
+best_fid = float('inf')  # Initialize with infinity
+fid_scores = []  # Track FID scores over epochs
+
 # Create directories for saving results
 os.makedirs('./dcgan_weights', exist_ok=True)
 os.makedirs('./dcgan_images', exist_ok=True)
@@ -532,17 +464,49 @@ for epoch in range(num_epochs):
             fake = generator(fixed_noise).detach().cpu()
         save_image(fake, f'./dcgan_images/fake_samples_epoch_{epoch:03d}.png', 
                    normalize=True, nrow=8)
+    
+    # Calculate FID score every 10 epochs
+    if (epoch % 10 == 0) or (epoch == num_epochs-1):
+        print(f"\nCalculating FID score for epoch {epoch}...")
+        current_fid = calculate_fid(
+            generator=generator,
+            real_data_path=real_data_path,
+            device=device,
+            latent_dim=latent_dim,
+            num_gen_images=2000,
+            eval_gen_batch_size=64,
+            fid_calc_batch_size=50,
+            dims=2048
+        )
+        fid_scores.append((epoch, current_fid))
+        print(f"Epoch {epoch} - FID Score: {current_fid:.4f}")
         
-    # Save model checkpoints
+        # Save model if it has the best FID score so far
+        if current_fid < best_fid:
+            best_fid = current_fid
+            print(f"New best FID score: {best_fid:.4f} - Saving best model...")
+            torch.save(generator.state_dict(), './dcgan_weights/generator_best_fid.pth')
+            torch.save(discriminator.state_dict(), './dcgan_weights/discriminator_best_fid.pth')
+            # Save epoch info
+            with open('./dcgan_weights/best_fid_info.txt', 'w') as f:
+                f.write(f"Best FID Score: {best_fid:.4f}\n")
+                f.write(f"Epoch: {epoch}\n")
+        
+    # Save model checkpoints periodically
     if (epoch % 50 == 0) or (epoch == num_epochs-1):
         torch.save(generator.state_dict(), f'./dcgan_weights/generator_epoch_{epoch}.pth')
         torch.save(discriminator.state_dict(), f'./dcgan_weights/discriminator_epoch_{epoch}.pth')
 
 print("Training Complete!")
+print(f"\nBest FID Score: {best_fid:.4f}")
+print(f"Best model saved at: ./dcgan_weights/generator_best_fid.pth")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
 # Plot the training losses
-plt.figure(figsize=(10, 5))
+plt.figure(figsize=(15, 5))
+
+# Subplot 1: Losses
+plt.subplot(1, 2, 1)
 plt.title("Generator and Discriminator Loss During Training")
 plt.plot(G_losses, label="G")
 plt.plot(D_losses, label="D")
@@ -550,6 +514,20 @@ plt.xlabel("iterations")
 plt.ylabel("Loss")
 plt.legend()
 plt.grid(True)
+
+# Subplot 2: FID Scores
+if len(fid_scores) > 0:
+    plt.subplot(1, 2, 2)
+    epochs_fid, scores_fid = zip(*fid_scores)
+    plt.title("FID Score During Training")
+    plt.plot(epochs_fid, scores_fid, marker='o', color='green')
+    plt.axhline(y=best_fid, color='r', linestyle='--', label=f'Best FID: {best_fid:.4f}')
+    plt.xlabel("Epoch")
+    plt.ylabel("FID Score")
+    plt.legend()
+    plt.grid(True)
+
+plt.tight_layout()
 plt.show()
 
 # %% [markdown] {"papermill":{"duration":0.174068,"end_time":"2021-10-09T14:16:51.448795","exception":false,"start_time":"2021-10-09T14:16:51.274727","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
@@ -601,17 +579,23 @@ def display_multiple_img(images_paths):
     plt.tight_layout(pad=2.0)  # 增加子图间距
     plt.show()
 
-# %% [code] {"_kg_hide-output":true,"papermill":{"duration":32.195267,"end_time":"2021-10-09T14:17:24.773111","exception":false,"start_time":"2021-10-09T14:16:52.577844","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
-# display_multiple_img(getImagePaths('./images'))
-
 # %% [code] {"jupyter":{"outputs_hidden":false}}
-# Generate images using the trained generator
+# Generate images using the best trained generator (based on FID)
 generated_images_dir = './dcgan_generated'
 os.makedirs(generated_images_dir, exist_ok=True)
 
-# Load the trained generator model (adjust epoch number as needed)
+# Load the best generator model (based on FID score)
 generator_eval = Generator().to(device)
-generator_eval.load_state_dict(torch.load(f'./dcgan_weights/generator_epoch_{num_epochs-1}.pth'))
+best_model_path = './dcgan_weights/generator_best_fid.pth'
+
+# Check if best model exists, otherwise use final epoch model
+if os.path.exists(best_model_path):
+    print(f"Loading best model (FID: {best_fid:.4f})...")
+    generator_eval.load_state_dict(torch.load(best_model_path))
+else:
+    print(f"Best model not found, loading final epoch model...")
+    generator_eval.load_state_dict(torch.load(f'./dcgan_weights/generator_epoch_{num_epochs-1}.pth'))
+
 generator_eval.eval()
 
 print("Generating images...")
@@ -642,5 +626,3 @@ display_multiple_img(getImagePaths(generated_images_dir))
 #    - Remove fully connected hidden layers
 #    - Use ReLU activation in generator (except output layer which uses Tanh)
 #    - Use LeakyReLU activation in discriminator
-
-# %% [code] {"jupyter":{"outputs_hidden":false}}
