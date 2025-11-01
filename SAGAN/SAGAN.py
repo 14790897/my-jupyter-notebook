@@ -65,7 +65,7 @@ g_steps = 1  # Balanced training (1:1 ratio)
 
 # ============ LOSS FUNCTION CONFIGURATION ============
 # Choose loss function: 'bce' or 'hinge'
-loss_type = 'bce'  # Options: 'bce' (BCE Loss) or 'hinge' (Hinge Loss)
+loss_type = 'hinge'  # Options: 'bce' (BCE Loss) or 'hinge' (Hinge Loss)
 # =====================================================
 
 # Label smoothing for better training stability (only used with BCE)
@@ -106,6 +106,11 @@ source_dir = './train/data'                  # 你的 160x160 原始图片
 target_dir = './real_images_64x64_for_fid'   # 你要创建的 64x64 评估集
 real_data_path = './real_images_64x64_for_fid'
 
+# 测试集路径 (用于最终FID评估，不参与训练)
+test_source_dir = '/kaggle/input/efficientnet-data/test/0'
+test_target_dir = './test_images_64x64_for_fid'
+test_data_path = './test_images_64x64_for_fid'
+
 # 确保目标目录存在
 if os.path.exists(target_dir):
     shutil.rmtree(target_dir)
@@ -143,6 +148,34 @@ for file_name in os.listdir(source_dir):
 
 print(f"--- 完成！---")
 print(f"总共 {count} 张 160x160 的图片被下采样并保存到了 {target_dir}")
+
+# --- 准备测试集 (用于最终FID评估) ---
+if os.path.exists(test_target_dir):
+    shutil.rmtree(test_target_dir)
+os.makedirs(test_target_dir)
+
+print(f"\n正在从 {test_source_dir} 创建 64x64 测试集于 {test_target_dir}...")
+
+# 遍历测试集图片
+test_count = 0
+for file_name in os.listdir(test_source_dir):
+    if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+        try:
+            file_path = os.path.join(test_source_dir, file_name)
+            img = Image.open(file_path).convert('RGB')
+            
+            # 应用下采样
+            img_resized = resize_transform(img)
+            
+            # 保存到新目录
+            save_path = os.path.join(test_target_dir, file_name)
+            img_resized.save(save_path)
+            test_count += 1
+        except Exception as e:
+            print(f"处理测试图片 {file_name} 时出错: {e}")
+
+print(f"--- 测试集准备完成！---")
+print(f"总共 {test_count} 张测试集图片被下采样并保存到了 {test_target_dir}")
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # ## 数据加载 (Data Loading)
@@ -690,7 +723,7 @@ for epoch in range(num_epochs):
 
 print("Training Complete!")
 print("=" * 50)
-print(f"Best FID Score Achieved: {best_fid:.4f}")
+print(f"Best FID Score Achieved (vs training set): {best_fid:.4f}")
 print(f"Best model saved at: ./dcgan_weights/generator_best_fid.pth")
 if best_fid < 50:
     print("🎉 SUCCESS! FID target (<50) achieved!")
@@ -699,6 +732,62 @@ elif best_fid < 60:
 else:
     print("⚠ Consider training longer or adjusting hyperparameters.")
 print("=" * 50)
+
+# ============ FINAL EVALUATION WITH TEST SET ============
+print("\n" + "=" * 50)
+print("📊 FINAL EVALUATION: Testing with unseen test set")
+print("=" * 50)
+print(f"Test set path: {test_data_path}")
+print(f"Calculating FID score using test set (not used during training)...")
+
+# Calculate final FID score using test set
+final_test_fid = calculate_fid(
+    generator=generator,
+    real_data_path=test_data_path,
+    device=device,
+    latent_dim=latent_dim,
+    num_gen_images=1000,  # Generate more images for accurate evaluation
+    eval_gen_batch_size=32,
+    fid_calc_batch_size=50,
+    dims=2048
+)
+
+print("\n" + "=" * 50)
+print("🎯 FINAL TEST SET RESULTS")
+print("=" * 50)
+print(f"FID Score (vs Test Set): {final_test_fid:.4f}")
+print(f"FID Score (vs Training Set): {best_fid:.4f}")
+print(f"Difference: {abs(final_test_fid - best_fid):.4f}")
+if final_test_fid < 50:
+    print("🎉 EXCELLENT! Test FID < 50 achieved!")
+elif final_test_fid < 60:
+    print("✓ Good performance on test set!")
+elif final_test_fid < 80:
+    print("⚠ Moderate performance. Consider more training.")
+else:
+    print("⚠ Consider adjusting hyperparameters or training longer.")
+print("=" * 50)
+
+# Save final evaluation results
+with open('./dcgan_weights/final_evaluation.txt', 'w') as f:
+    f.write("=" * 50 + "\n")
+    f.write("FINAL EVALUATION RESULTS\n")
+    f.write("=" * 50 + "\n\n")
+    f.write(f"Loss Type: {loss_type.upper()}\n")
+    f.write(f"Training Epochs: {num_epochs}\n")
+    f.write(f"Batch Size: {batch_size}\n")
+    f.write(f"Learning Rate: {learning_rate}\n")
+    f.write(f"Latent Dimension: {latent_dim}\n\n")
+    f.write("FID Scores:\n")
+    f.write(f"  - Best FID (vs Training Set): {best_fid:.4f}\n")
+    f.write(f"  - Final FID (vs Test Set): {final_test_fid:.4f}\n")
+    f.write(f"  - Difference: {abs(final_test_fid - best_fid):.4f}\n\n")
+    f.write("Test Set Info:\n")
+    f.write(f"  - Test Data Path: {test_data_path}\n")
+    f.write(f"  - Generated Images for Evaluation: 1000\n")
+    f.write("=" * 50 + "\n")
+
+print(f"\n✅ Final evaluation results saved to: ./dcgan_weights/final_evaluation.txt")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
 # Plot the training losses
