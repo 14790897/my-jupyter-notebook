@@ -151,7 +151,7 @@ schedulerG = optim.lr_scheduler.StepLR(optimizerG, step_size=500, gamma=0.5)
 
 ```python
 # 推荐运行命令
-!python gan.py
+!python SAGAN.py
 
 # 训练期间监控
 - 检查 ./dcgan_images/ 中的生成样本
