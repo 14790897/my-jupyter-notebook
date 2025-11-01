@@ -14,22 +14,54 @@ from torchsummary import summary
 import datetime
 import matplotlib.pyplot as plt
 from pytorch_fid import fid_score  # 导入FID计算模块
+import torch.nn.functional as F
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 # torch.manual_seed(1)
+
+# Self-Attention module for improved generation quality
+class SelfAttention(nn.Module):
+    def __init__(self, in_channels):
+        super(SelfAttention, self).__init__()
+        self.query = nn.Conv2d(in_channels, in_channels // 8, 1)
+        self.key = nn.Conv2d(in_channels, in_channels // 8, 1)
+        self.value = nn.Conv2d(in_channels, in_channels, 1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch_size, C, width, height = x.size()
+
+        # Query, Key, Value projections
+        query = self.query(x).view(batch_size, -1, width * height).permute(0, 2, 1)
+        key = self.key(x).view(batch_size, -1, width * height)
+        value = self.value(x).view(batch_size, -1, width * height)
+
+        # Attention map
+        attention = F.softmax(torch.bmm(query, key), dim=-1)
+
+        # Apply attention to value
+        out = torch.bmm(value, attention.permute(0, 2, 1))
+        out = out.view(batch_size, C, width, height)
+
+        # Residual connection with learnable weight
+        out = self.gamma * out + x
+        return out
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # ## DCGAN 参数配置
 
 # %% [code] {"id":"xVXC_q2ekuf8","papermill":{"duration":0.079089,"end_time":"2021-10-09T06:31:24.988503","exception":false,"start_time":"2021-10-09T06:31:24.909414","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:17.864024Z","iopub.execute_input":"2025-10-29T08:47:17.864499Z","iopub.status.idle":"2025-10-29T08:47:17.926536Z","shell.execute_reply.started":"2025-10-29T08:47:17.864478Z","shell.execute_reply":"2025-10-29T08:47:17.925750Z"},"jupyter":{"outputs_hidden":false}}
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-batch_size = 16  # DCGAN recommended batch size
-learning_rate = 0.0002  # DCGAN recommended learning rate
-num_epochs = 1000  # Training epochs
+batch_size = 8  # Smaller batch for small dataset
+learning_rate = 0.0001  # Reduced learning rate for stability
+num_epochs = 2000  # More epochs for small dataset
 image_size = 64  # Image size (64x64)
-latent_dim = 100  # Latent vector dimension (DCGAN standard)
+latent_dim = 128  # Increased latent dimension for more diversity
 nc = 1  # Number of channels (1 for grayscale, 3 for RGB)
 ngf = 64  # Number of generator filters
 ndf = 64  # Number of discriminator filters
+# Training strategy parameters
+d_steps = 1  # Discriminator steps per generator step
+g_steps = 2  # Generator steps (train G more often)
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # ## data prepare
@@ -107,10 +139,15 @@ print(f"总共 {count} 张 160x160 的图片被下采样并保存到了 {target_
 # ## 数据加载 (Data Loading)
 
 # %% [code] {"id":"rmKRUtX6kwt1","papermill":{"duration":12.148366,"end_time":"2021-10-09T06:31:37.214299","exception":false,"start_time":"2021-10-09T06:31:25.065933","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:19.951886Z","iopub.execute_input":"2025-10-29T08:47:19.952156Z","iopub.status.idle":"2025-10-29T08:47:19.960161Z","shell.execute_reply.started":"2025-10-29T08:47:19.952132Z","shell.execute_reply":"2025-10-29T08:47:19.959481Z"},"jupyter":{"outputs_hidden":false}}
-# DCGAN standard data transforms
+# Optimized data transforms - minimal augmentation for better quality
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
-    transforms.Grayscale(num_output_channels=nc),  # Convert to grayscale
+    transforms.Grayscale(num_output_channels=nc),
+    # Minimal augmentation - only flips for better FID
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomVerticalFlip(p=0.5),
+    # Removed: ColorJitter can hurt image quality metrics
+    # Removed: Rotation and Affine transforms (not suitable for particle data)
     transforms.ToTensor(),
     transforms.Normalize([0.5] * nc, [0.5] * nc)  # Normalize to [-1, 1]
 ])
@@ -251,41 +288,58 @@ def weights_init(m):
 # %% [code] {"id":"_gw3SMN7jtOB","papermill":{"duration":0.051132,"end_time":"2021-10-09T06:31:39.649246","exception":false,"start_time":"2021-10-09T06:31:39.598114","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:20.815040Z","iopub.execute_input":"2025-10-29T08:47:20.815280Z","iopub.status.idle":"2025-10-29T08:47:20.828509Z","shell.execute_reply.started":"2025-10-29T08:47:20.815264Z","shell.execute_reply":"2025-10-29T08:47:20.827735Z"},"jupyter":{"outputs_hidden":false}}
 class Generator(nn.Module):
     """
-    DCGAN Generator
+    Improved DCGAN Generator with Self-Attention
     Input: latent vector z of dimension (latent_dim, 1, 1)
     Output: Generated image of size (nc, 64, 64)
     """
     def __init__(self):
         super(Generator, self).__init__()
-        self.main = nn.Sequential(
-            # Input is latent_dim x 1 x 1
+        # Input is latent_dim x 1 x 1
+        self.layer1 = nn.Sequential(
             nn.ConvTranspose2d(latent_dim, ngf * 8, 4, 1, 0, bias=False),
             nn.BatchNorm2d(ngf * 8),
-            nn.ReLU(True),
-            # State size: (ngf*8) x 4 x 4
-            
+            nn.ReLU(True)
+        )
+        # State size: (ngf*8) x 4 x 4
+
+        self.layer2 = nn.Sequential(
             nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
-            # State size: (ngf*4) x 8 x 8
-            
+            nn.ReLU(True)
+        )
+        # State size: (ngf*4) x 8 x 8
+
+        self.layer3 = nn.Sequential(
             nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
-            # State size: (ngf*2) x 16 x 16
-            
+            nn.ReLU(True)
+        )
+        # State size: (ngf*2) x 16 x 16
+
+        # Add Self-Attention at 16x16 resolution
+        self.attention = SelfAttention(ngf * 2)
+
+        self.layer4 = nn.Sequential(
             nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
-            # State size: (ngf) x 32 x 32
-            
+            nn.ReLU(True)
+        )
+        # State size: (ngf) x 32 x 32
+
+        self.layer5 = nn.Sequential(
             nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
             nn.Tanh()
-            # State size: (nc) x 64 x 64
         )
+        # State size: (nc) x 64 x 64
 
     def forward(self, input):
-        return self.main(input)    
+        x = self.layer1(input)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.attention(x)  # Apply self-attention
+        x = self.layer4(x)
+        x = self.layer5(x)
+        return x
 
 # %% [code] {"papermill":{"duration":3.374826,"end_time":"2021-10-09T06:31:43.061517","exception":false,"start_time":"2021-10-09T06:31:39.686691","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:20.829310Z","iopub.execute_input":"2025-10-29T08:47:20.829587Z","iopub.status.idle":"2025-10-29T08:47:21.082683Z","shell.execute_reply.started":"2025-10-29T08:47:20.829566Z","shell.execute_reply":"2025-10-29T08:47:21.081948Z"},"jupyter":{"outputs_hidden":false}}
 generator = Generator().to(device)
@@ -302,40 +356,57 @@ summary(generator, (latent_dim,1,1))
 # %% [code] {"id":"xPEMXbaJCPsQ","papermill":{"duration":0.052823,"end_time":"2021-10-09T06:31:43.927067","exception":false,"start_time":"2021-10-09T06:31:43.874244","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.390244Z","iopub.execute_input":"2025-10-29T08:47:21.390710Z","iopub.status.idle":"2025-10-29T08:47:21.396845Z","shell.execute_reply.started":"2025-10-29T08:47:21.390683Z","shell.execute_reply":"2025-10-29T08:47:21.396239Z"},"jupyter":{"outputs_hidden":false}}
 class Discriminator(nn.Module):
     """
-    DCGAN Discriminator
+    Improved DCGAN Discriminator with Self-Attention and Spectral Normalization
     Input: Image of size (nc, 64, 64)
     Output: Single scalar value (probability of being real)
     """
     def __init__(self):
         super(Discriminator, self).__init__()
-        self.main = nn.Sequential(
-            # Input is (nc) x 64 x 64
-            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # State size: (ndf) x 32 x 32
-            
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            # State size: (ndf*2) x 16 x 16
-            
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            # State size: (ndf*4) x 8 x 8
-            
-            nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            # State size: (ndf*8) x 4 x 4
-            
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
-            nn.Sigmoid()
-            # State size: 1 x 1 x 1
+        # Input is (nc) x 64 x 64
+        self.layer1 = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(nc, ndf, 4, 2, 1, bias=False)),
+            nn.LeakyReLU(0.2, inplace=True)
         )
+        # State size: (ndf) x 32 x 32
+
+        self.layer2 = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        # State size: (ndf*2) x 16 x 16
+
+        # Add Self-Attention at 16x16 resolution
+        self.attention = SelfAttention(ndf * 2)
+
+        self.layer3 = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        # State size: (ndf*4) x 8 x 8
+
+        self.layer4 = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+        # State size: (ndf*8) x 4 x 4
+
+        self.layer5 = nn.Sequential(
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid()
+        )
+        # State size: 1 x 1 x 1
 
     def forward(self, input):
-        return self.main(input).view(-1, 1).squeeze(1)
+        x = self.layer1(input)
+        x = self.layer2(x)
+        x = self.attention(x)  # Apply self-attention
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.layer5(x)
+        return x.view(-1, 1).squeeze(1)
 
 # %% [code] {"id":"1HJv-CnSkIuN","papermill":{"duration":0.071596,"end_time":"2021-10-09T06:31:44.037229","exception":false,"start_time":"2021-10-09T06:31:43.965633","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.397648Z","iopub.execute_input":"2025-10-29T08:47:21.397904Z","iopub.status.idle":"2025-10-29T08:47:21.465226Z","shell.execute_reply.started":"2025-10-29T08:47:21.397884Z","shell.execute_reply":"2025-10-29T08:47:21.464602Z"},"jupyter":{"outputs_hidden":false}}
 discriminator = Discriminator().to(device)
@@ -364,9 +435,13 @@ real_label = 1.0
 fake_label = 0.0
 
 # %% [code] {"id":"sis4zEVQkLf_","papermill":{"duration":0.077416,"end_time":"2021-10-09T06:31:44.914779","exception":false,"start_time":"2021-10-09T06:31:44.837363","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.691736Z","iopub.execute_input":"2025-10-29T08:47:21.691961Z","iopub.status.idle":"2025-10-29T08:47:21.708059Z","shell.execute_reply.started":"2025-10-29T08:47:21.691947Z","shell.execute_reply":"2025-10-29T08:47:21.707301Z"},"jupyter":{"outputs_hidden":false}}
-# Setup Adam optimizers for both G and D (beta1=0.5 as suggested in DCGAN paper)
-optimizerD = optim.Adam(discriminator.parameters(), lr=learning_rate, betas=(0.5, 0.999))
-optimizerG = optim.Adam(generator.parameters(), lr=learning_rate, betas=(0.5, 0.999))
+# Setup Adam optimizers for both G and D
+optimizerD = optim.Adam(discriminator.parameters(), lr=learning_rate, betas=(0.0, 0.9))
+optimizerG = optim.Adam(generator.parameters(), lr=learning_rate, betas=(0.0, 0.9))
+
+# Learning rate schedulers for better convergence
+schedulerD = optim.lr_scheduler.CosineAnnealingLR(optimizerD, T_max=num_epochs, eta_min=1e-6)
+schedulerG = optim.lr_scheduler.CosineAnnealingLR(optimizerG, T_max=num_epochs, eta_min=1e-6)
 
 # %% [markdown] {"papermill":{"duration":0.040677,"end_time":"2021-10-09T06:31:46.648014","exception":false,"start_time":"2021-10-09T06:31:46.607337","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
 # 
@@ -391,96 +466,101 @@ fid_scores = []  # Track FID scores over epochs
 os.makedirs('./dcgan_weights', exist_ok=True)
 os.makedirs('./dcgan_images', exist_ok=True)
 
-print("Starting DCGAN Training Loop...")
+print("Starting Improved DCGAN Training Loop...")
 print("-" * 50)
 
 for epoch in range(num_epochs):
+    epoch_d_loss = 0
+    epoch_g_loss = 0
+
     for i, (real_images, _) in enumerate(train_loader):
         ############################
         # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
         ###########################
-        ## Train with all-real batch
-        discriminator.zero_grad()
-        real_images = real_images.to(device)
-        b_size = real_images.size(0)
-        label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
-        
-        # Forward pass real batch through D
-        output = discriminator(real_images)
-        # Calculate loss on all-real batch
-        errD_real = criterion(output, label)
-        # Calculate gradients for D in backward pass
-        errD_real.backward()
-        D_x = output.mean().item()
+        for _ in range(d_steps):
+            discriminator.zero_grad()
+            real_images_device = real_images.to(device)
+            b_size = real_images_device.size(0)
 
-        ## Train with all-fake batch
-        # Generate batch of latent vectors
-        noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
-        # Generate fake image batch with G
-        fake = generator(noise)
-        label.fill_(fake_label)
-        # Classify all fake batch with D
-        output = discriminator(fake.detach())
-        # Calculate D's loss on the all-fake batch
-        errD_fake = criterion(output, label)
-        # Calculate the gradients for this batch
-        errD_fake.backward()
-        D_G_z1 = output.mean().item()
-        # Add the gradients from the all-real and all-fake batches
-        errD = errD_real + errD_fake
-        # Update D
-        optimizerD.step()
+            # Train with real batch
+            label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+            output = discriminator(real_images_device)
+            errD_real = criterion(output, label)
+            errD_real.backward()
+            D_x = output.mean().item()
+
+            # Train with fake batch
+            noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
+            fake = generator(noise)
+            label.fill_(fake_label)
+            output = discriminator(fake.detach())
+            errD_fake = criterion(output, label)
+            errD_fake.backward()
+            D_G_z1 = output.mean().item()
+
+            errD = errD_real + errD_fake
+            optimizerD.step()
 
         ############################
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
-        generator.zero_grad()
-        label.fill_(real_label)  # fake labels are real for generator cost
-        # Since we just updated D, perform another forward pass of all-fake batch through D
-        output = discriminator(fake)
-        # Calculate G's loss based on this output
-        errG = criterion(output, label)
-        # Calculate gradients for G
-        errG.backward()
-        D_G_z2 = output.mean().item()
-        # Update G
-        optimizerG.step()
+        for _ in range(g_steps):
+            generator.zero_grad()
+            noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
+            fake = generator(noise)
+            label.fill_(real_label)
+            output = discriminator(fake)
+            errG = criterion(output, label)
+            errG.backward()
+            D_G_z2 = output.mean().item()
+            optimizerG.step()
 
         # Save Losses for plotting later
         G_losses.append(errG.item())
         D_losses.append(errD.item())
+        epoch_d_loss += errD.item()
+        epoch_g_loss += errG.item()
 
         # Output training stats
-        if i % 50 == 0:
+        if i % 20 == 0:
             print(f'[{epoch}/{num_epochs}][{i}/{len(train_loader)}] '
                   f'Loss_D: {errD.item():.4f} Loss_G: {errG.item():.4f} '
-                  f'D(x): {D_x:.4f} D(G(z)): {D_G_z1:.4f} / {D_G_z2:.4f}')
+                  f'D(x): {D_x:.4f} D(G(z)): {D_G_z1:.4f} / {D_G_z2:.4f} '
+                  f'LR_G: {schedulerG.get_last_lr()[0]:.6f}')
 
         iters += 1
+
+    # Step the learning rate schedulers
+    schedulerD.step()
+    schedulerG.step()
+
+    avg_d_loss = epoch_d_loss / len(train_loader)
+    avg_g_loss = epoch_g_loss / len(train_loader)
+    print(f'\nEpoch {epoch} Summary: Avg D Loss: {avg_d_loss:.4f}, Avg G Loss: {avg_g_loss:.4f}\n')
 
     # Check how the generator is doing by saving G's output on fixed_noise
     if (epoch % 10 == 0) or (epoch == num_epochs-1):
         with torch.no_grad():
             fake = generator(fixed_noise).detach().cpu()
-        save_image(fake, f'./dcgan_images/fake_samples_epoch_{epoch:03d}.png', 
+        save_image(fake, f'./dcgan_images/fake_samples_epoch_{epoch:03d}.png',
                    normalize=True, nrow=8)
-    
-    # Calculate FID score every 10 epochs
-    if (epoch % 10 == 0) or (epoch == num_epochs-1):
+
+    # Calculate FID score every 20 epochs (less frequent to save time)
+    if (epoch % 20 == 0 and epoch > 0) or (epoch == num_epochs-1):
         print(f"\nCalculating FID score for epoch {epoch}...")
         current_fid = calculate_fid(
             generator=generator,
             real_data_path=real_data_path,
             device=device,
             latent_dim=latent_dim,
-            num_gen_images=2000,
-            eval_gen_batch_size=64,
+            num_gen_images=300,  # Match dataset size
+            eval_gen_batch_size=32,
             fid_calc_batch_size=50,
             dims=2048
         )
         fid_scores.append((epoch, current_fid))
         print(f"Epoch {epoch} - FID Score: {current_fid:.4f}")
-        
+
         # Save model if it has the best FID score so far
         if current_fid < best_fid:
             best_fid = current_fid
@@ -491,9 +571,9 @@ for epoch in range(num_epochs):
             with open('./dcgan_weights/best_fid_info.txt', 'w') as f:
                 f.write(f"Best FID Score: {best_fid:.4f}\n")
                 f.write(f"Epoch: {epoch}\n")
-        
+
     # Save model checkpoints periodically
-    if (epoch % 50 == 0) or (epoch == num_epochs-1):
+    if (epoch % 100 == 0 and epoch > 0) or (epoch == num_epochs-1):
         torch.save(generator.state_dict(), f'./dcgan_weights/generator_epoch_{epoch}.pth')
         torch.save(discriminator.state_dict(), f'./dcgan_weights/discriminator_epoch_{epoch}.pth')
 
