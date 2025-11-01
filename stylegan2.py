@@ -109,6 +109,8 @@ class ModulatedConv2d(nn.Module):
         
         if self.upsample:
             x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
+            height = height * 2  # Update height after upsampling
+            width = width * 2    # Update width after upsampling
         
         x = x.view(1, batch * in_channel, height, width)
         out = F.conv2d(x, weight, padding=self.padding, groups=batch)
