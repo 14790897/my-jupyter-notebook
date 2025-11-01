@@ -47,12 +47,12 @@ class SelfAttention(nn.Module):
         return out
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
-# ## DCGAN 参数配置
+# ## SAGAN 参数配置 (Self-Attention GAN)
 
 # %% [code] {"id":"xVXC_q2ekuf8","papermill":{"duration":0.079089,"end_time":"2021-10-09T06:31:24.988503","exception":false,"start_time":"2021-10-09T06:31:24.909414","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:17.864024Z","iopub.execute_input":"2025-10-29T08:47:17.864499Z","iopub.status.idle":"2025-10-29T08:47:17.926536Z","shell.execute_reply.started":"2025-10-29T08:47:17.864478Z","shell.execute_reply":"2025-10-29T08:47:17.925750Z"},"jupyter":{"outputs_hidden":false}}
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-batch_size = 8  # Smaller batch for small dataset
-learning_rate = 0.0001  # Reduced learning rate for stability
+batch_size = 16  # Increased batch size for better gradient estimation
+learning_rate = 0.0002  # DCGAN recommended learning rate
 num_epochs = 2000  # More epochs for small dataset
 image_size = 64  # Image size (64x64)
 latent_dim = 128  # Increased latent dimension for more diversity
@@ -61,7 +61,10 @@ ngf = 64  # Number of generator filters
 ndf = 64  # Number of discriminator filters
 # Training strategy parameters
 d_steps = 1  # Discriminator steps per generator step
-g_steps = 2  # Generator steps (train G more often)
+g_steps = 1  # Balanced training (1:1 ratio)
+# Label smoothing for better training stability
+real_label_smooth = 0.9  # Real labels = 0.9 instead of 1.0
+fake_label_smooth = 0.0  # Fake labels = 0.0
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # ## data prepare
@@ -288,9 +291,11 @@ def weights_init(m):
 # %% [code] {"id":"_gw3SMN7jtOB","papermill":{"duration":0.051132,"end_time":"2021-10-09T06:31:39.649246","exception":false,"start_time":"2021-10-09T06:31:39.598114","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:20.815040Z","iopub.execute_input":"2025-10-29T08:47:20.815280Z","iopub.status.idle":"2025-10-29T08:47:20.828509Z","shell.execute_reply.started":"2025-10-29T08:47:20.815264Z","shell.execute_reply":"2025-10-29T08:47:20.827735Z"},"jupyter":{"outputs_hidden":false}}
 class Generator(nn.Module):
     """
-    Improved DCGAN Generator with Self-Attention
+    SAGAN Generator (Self-Attention GAN)
+    Architecture: DCGAN backbone with Self-Attention at 16x16 resolution
     Input: latent vector z of dimension (latent_dim, 1, 1)
     Output: Generated image of size (nc, 64, 64)
+    Reference: Zhang et al. "Self-Attention Generative Adversarial Networks" (2018)
     """
     def __init__(self):
         super(Generator, self).__init__()
@@ -356,9 +361,11 @@ summary(generator, (latent_dim,1,1))
 # %% [code] {"id":"xPEMXbaJCPsQ","papermill":{"duration":0.052823,"end_time":"2021-10-09T06:31:43.927067","exception":false,"start_time":"2021-10-09T06:31:43.874244","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.390244Z","iopub.execute_input":"2025-10-29T08:47:21.390710Z","iopub.status.idle":"2025-10-29T08:47:21.396845Z","shell.execute_reply.started":"2025-10-29T08:47:21.390683Z","shell.execute_reply":"2025-10-29T08:47:21.396239Z"},"jupyter":{"outputs_hidden":false}}
 class Discriminator(nn.Module):
     """
-    Improved DCGAN Discriminator with Self-Attention and Spectral Normalization
+    SAGAN Discriminator (Self-Attention GAN)
+    Architecture: DCGAN backbone with Self-Attention at 16x16 + Spectral Normalization
     Input: Image of size (nc, 64, 64)
     Output: Single scalar value (probability of being real)
+    Reference: Zhang et al. "Self-Attention Generative Adversarial Networks" (2018)
     """
     def __init__(self):
         super(Discriminator, self).__init__()
@@ -466,7 +473,13 @@ fid_scores = []  # Track FID scores over epochs
 os.makedirs('./dcgan_weights', exist_ok=True)
 os.makedirs('./dcgan_images', exist_ok=True)
 
-print("Starting Improved DCGAN Training Loop...")
+# Learning rate schedulers for adaptive learning
+schedulerD = optim.lr_scheduler.StepLR(optimizerD, step_size=500, gamma=0.5)
+schedulerG = optim.lr_scheduler.StepLR(optimizerG, step_size=500, gamma=0.5)
+
+print("Starting Optimized SAGAN (Self-Attention GAN) Training Loop...")
+print(f"Architecture: DCGAN backbone + Self-Attention mechanism")
+print(f"Target: FID < 50")
 print("-" * 50)
 
 for epoch in range(num_epochs):
@@ -482,8 +495,8 @@ for epoch in range(num_epochs):
             real_images_device = real_images.to(device)
             b_size = real_images_device.size(0)
 
-            # Train with real batch
-            label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
+            # Train with real batch (with label smoothing)
+            label = torch.full((b_size,), real_label_smooth, dtype=torch.float, device=device)
             output = discriminator(real_images_device)
             errD_real = criterion(output, label)
             errD_real.backward()
@@ -492,13 +505,15 @@ for epoch in range(num_epochs):
             # Train with fake batch
             noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
             fake = generator(noise)
-            label.fill_(fake_label)
+            label.fill_(fake_label_smooth)
             output = discriminator(fake.detach())
             errD_fake = criterion(output, label)
             errD_fake.backward()
             D_G_z1 = output.mean().item()
 
             errD = errD_real + errD_fake
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
             optimizerD.step()
 
         ############################
@@ -508,11 +523,14 @@ for epoch in range(num_epochs):
             generator.zero_grad()
             noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
             fake = generator(noise)
-            label.fill_(real_label)
+            # Generator wants discriminator to think fakes are real (label = 1.0, not smoothed)
+            label.fill_(1.0)
             output = discriminator(fake)
             errG = criterion(output, label)
             errG.backward()
             D_G_z2 = output.mean().item()
+            # Gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
             optimizerG.step()
 
         # Save Losses for plotting later
@@ -545,32 +563,51 @@ for epoch in range(num_epochs):
         save_image(fake, f'./dcgan_images/fake_samples_epoch_{epoch:03d}.png',
                    normalize=True, nrow=8)
 
-    # Calculate FID score every 20 epochs (less frequent to save time)
-    if (epoch % 20 == 0 and epoch > 0) or (epoch == num_epochs-1):
+    # Adaptive FID calculation frequency
+    # More frequent early on, less frequent later
+    should_calc_fid = False
+    if epoch < 200:
+        should_calc_fid = (epoch % 10 == 0 and epoch > 0)  # Every 10 epochs for first 200
+    elif epoch < 800:
+        should_calc_fid = (epoch % 20 == 0)  # Every 20 epochs from 200-800
+    else:
+        should_calc_fid = (epoch % 50 == 0)  # Every 50 epochs after 800
+    
+    if should_calc_fid or (epoch == num_epochs-1):
         print(f"\nCalculating FID score for epoch {epoch}...")
         current_fid = calculate_fid(
             generator=generator,
             real_data_path=real_data_path,
             device=device,
             latent_dim=latent_dim,
-            num_gen_images=300,  # Match dataset size
+            num_gen_images=500,  # More samples for better FID estimation
             eval_gen_batch_size=32,
             fid_calc_batch_size=50,
             dims=2048
         )
         fid_scores.append((epoch, current_fid))
-        print(f"Epoch {epoch} - FID Score: {current_fid:.4f}")
+        
+        # Calculate improvement
+        if len(fid_scores) > 1:
+            prev_fid = fid_scores[-2][1]
+            improvement = prev_fid - current_fid
+            print(f"Epoch {epoch} - FID Score: {current_fid:.4f} (Change: {improvement:+.4f})")
+        else:
+            print(f"Epoch {epoch} - FID Score: {current_fid:.4f}")
 
         # Save model if it has the best FID score so far
         if current_fid < best_fid:
+            improvement_from_best = best_fid - current_fid
             best_fid = current_fid
-            print(f"New best FID score: {best_fid:.4f} - Saving best model...")
+            print(f"🎯 New best FID score: {best_fid:.4f} (Improved by {improvement_from_best:.4f})")
+            print(f"   Saving best model...")
             torch.save(generator.state_dict(), './dcgan_weights/generator_best_fid.pth')
             torch.save(discriminator.state_dict(), './dcgan_weights/discriminator_best_fid.pth')
             # Save epoch info
             with open('./dcgan_weights/best_fid_info.txt', 'w') as f:
                 f.write(f"Best FID Score: {best_fid:.4f}\n")
                 f.write(f"Epoch: {epoch}\n")
+                f.write(f"Learning Rate: {schedulerG.get_last_lr()[0]:.6f}\n")
 
     # Save model checkpoints periodically
     if (epoch % 100 == 0 and epoch > 0) or (epoch == num_epochs-1):
@@ -578,8 +615,16 @@ for epoch in range(num_epochs):
         torch.save(discriminator.state_dict(), f'./dcgan_weights/discriminator_epoch_{epoch}.pth')
 
 print("Training Complete!")
-print(f"\nBest FID Score: {best_fid:.4f}")
+print("=" * 50)
+print(f"Best FID Score Achieved: {best_fid:.4f}")
 print(f"Best model saved at: ./dcgan_weights/generator_best_fid.pth")
+if best_fid < 50:
+    print("🎉 SUCCESS! FID target (<50) achieved!")
+elif best_fid < 60:
+    print("✓ Great progress! Close to target.")
+else:
+    print("⚠ Consider training longer or adjusting hyperparameters.")
+print("=" * 50)
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
 # Plot the training losses
