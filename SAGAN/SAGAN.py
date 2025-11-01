@@ -62,7 +62,13 @@ ndf = 64  # Number of discriminator filters
 # Training strategy parameters
 d_steps = 1  # Discriminator steps per generator step
 g_steps = 1  # Balanced training (1:1 ratio)
-# Label smoothing for better training stability
+
+# ============ LOSS FUNCTION CONFIGURATION ============
+# Choose loss function: 'bce' or 'hinge'
+loss_type = 'bce'  # Options: 'bce' (BCE Loss) or 'hinge' (Hinge Loss)
+# =====================================================
+
+# Label smoothing for better training stability (only used with BCE)
 real_label_smooth = 0.9  # Real labels = 0.9 instead of 1.0
 fake_label_smooth = 0.0  # Fake labels = 0.0
 
@@ -364,11 +370,13 @@ class Discriminator(nn.Module):
     SAGAN Discriminator (Self-Attention GAN)
     Architecture: DCGAN backbone with Self-Attention at 16x16 + Spectral Normalization
     Input: Image of size (nc, 64, 64)
-    Output: Single scalar value (probability of being real)
+    Output: Single scalar value (probability for BCE, logit for Hinge)
     Reference: Zhang et al. "Self-Attention Generative Adversarial Networks" (2018)
     """
-    def __init__(self):
+    def __init__(self, use_sigmoid=True):
         super(Discriminator, self).__init__()
+        self.use_sigmoid = use_sigmoid
+        
         # Input is (nc) x 64 x 64
         self.layer1 = nn.Sequential(
             nn.utils.spectral_norm(nn.Conv2d(nc, ndf, 4, 2, 1, bias=False)),
@@ -400,10 +408,9 @@ class Discriminator(nn.Module):
         )
         # State size: (ndf*8) x 4 x 4
 
-        self.layer5 = nn.Sequential(
-            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
-            nn.Sigmoid()
-        )
+        # Final layer without activation (activation applied conditionally in forward)
+        self.layer5_conv = nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False))
+        self.sigmoid = nn.Sigmoid()
         # State size: 1 x 1 x 1
 
     def forward(self, input):
@@ -412,20 +419,55 @@ class Discriminator(nn.Module):
         x = self.attention(x)  # Apply self-attention
         x = self.layer3(x)
         x = self.layer4(x)
-        x = self.layer5(x)
+        x = self.layer5_conv(x)
+        
+        # Apply sigmoid only for BCE loss
+        if self.use_sigmoid:
+            x = self.sigmoid(x)
+        
         return x.view(-1, 1).squeeze(1)
 
 # %% [code] {"id":"1HJv-CnSkIuN","papermill":{"duration":0.071596,"end_time":"2021-10-09T06:31:44.037229","exception":false,"start_time":"2021-10-09T06:31:43.965633","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.397648Z","iopub.execute_input":"2025-10-29T08:47:21.397904Z","iopub.status.idle":"2025-10-29T08:47:21.465226Z","shell.execute_reply.started":"2025-10-29T08:47:21.397884Z","shell.execute_reply":"2025-10-29T08:47:21.464602Z"},"jupyter":{"outputs_hidden":false}}
-discriminator = Discriminator().to(device)
+# Initialize discriminator based on loss type
+use_sigmoid = (loss_type == 'bce')
+discriminator = Discriminator(use_sigmoid=use_sigmoid).to(device)
 discriminator.apply(weights_init)
 print(discriminator)
+print(f"Discriminator output: {'with Sigmoid (BCE)' if use_sigmoid else 'without Sigmoid (Hinge)'}")
 
 # %% [code] {"papermill":{"duration":0.0621,"end_time":"2021-10-09T06:31:44.143231","exception":false,"start_time":"2021-10-09T06:31:44.081131","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.465995Z","iopub.execute_input":"2025-10-29T08:47:21.466294Z","iopub.status.idle":"2025-10-29T08:47:21.618916Z","shell.execute_reply.started":"2025-10-29T08:47:21.466276Z","shell.execute_reply":"2025-10-29T08:47:21.618138Z"},"jupyter":{"outputs_hidden":false}}
 summary(discriminator, (1,64,64))
 
 # %% [code] {"id":"RFxQC7T0laZi","papermill":{"duration":0.045481,"end_time":"2021-10-09T06:31:44.228253","exception":false,"start_time":"2021-10-09T06:31:44.182772","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.619849Z","iopub.execute_input":"2025-10-29T08:47:21.620138Z","iopub.status.idle":"2025-10-29T08:47:21.623842Z","shell.execute_reply.started":"2025-10-29T08:47:21.620115Z","shell.execute_reply":"2025-10-29T08:47:21.623267Z"},"jupyter":{"outputs_hidden":false}}
-# Binary Cross Entropy Loss for DCGAN
-criterion = nn.BCELoss()
+# ============ LOSS FUNCTION SETUP ============
+def discriminator_hinge_loss(real_output, fake_output):
+    """
+    Hinge loss for discriminator
+    L_D = E[max(0, 1 - D(x))] + E[max(0, 1 + D(G(z)))]
+    """
+    loss_real = torch.mean(F.relu(1.0 - real_output))
+    loss_fake = torch.mean(F.relu(1.0 + fake_output))
+    return loss_real + loss_fake
+
+def generator_hinge_loss(fake_output):
+    """
+    Hinge loss for generator
+    L_G = -E[D(G(z))]
+    """
+    return -torch.mean(fake_output)
+
+# Setup loss function based on configuration
+if loss_type == 'bce':
+    print("Using BCE Loss (Binary Cross-Entropy)")
+    print(f"  - Label Smoothing: Real={real_label_smooth}, Fake={fake_label_smooth}")
+    print(f"  - Discriminator Output: Sigmoid activated (0-1)")
+elif loss_type == 'hinge':
+    print("Using Hinge Loss")
+    print("  - No label smoothing (Hinge loss doesn't use it)")
+    print("  - Discriminator Output: Raw logits")
+else:
+    raise ValueError(f"Unknown loss_type: {loss_type}. Use 'bce' or 'hinge'")
+# ============================================
 
 # %% [markdown] {"papermill":{"duration":0.063915,"end_time":"2021-10-09T06:31:44.635401","exception":false,"start_time":"2021-10-09T06:31:44.571486","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
 # ## The discriminator loss has:
@@ -479,6 +521,13 @@ schedulerG = optim.lr_scheduler.StepLR(optimizerG, step_size=500, gamma=0.5)
 
 print("Starting Optimized SAGAN (Self-Attention GAN) Training Loop...")
 print(f"Architecture: DCGAN backbone + Self-Attention mechanism")
+print(f"Loss Function: {loss_type.upper()} {'(Binary Cross-Entropy)' if loss_type == 'bce' else '(Hinge Loss)'}")
+if loss_type == 'bce':
+    print(f"  - Label Smoothing: Real={real_label_smooth}, Fake={fake_label_smooth}")
+    print(f"  - Discriminator Output: Sigmoid activated (0-1)")
+elif loss_type == 'hinge':
+    print(f"  - No label smoothing (Hinge loss doesn't use it)")
+    print(f"  - Discriminator Output: Raw logits")
 print(f"Target: FID < 50")
 print("-" * 50)
 
@@ -488,45 +537,69 @@ for epoch in range(num_epochs):
 
     for i, (real_images, _) in enumerate(train_loader):
         ############################
-        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        # (1) Update D network
         ###########################
         for _ in range(d_steps):
             discriminator.zero_grad()
             real_images_device = real_images.to(device)
             b_size = real_images_device.size(0)
 
-            # Train with real batch (with label smoothing)
-            label = torch.full((b_size,), real_label_smooth, dtype=torch.float, device=device)
-            output = discriminator(real_images_device)
-            errD_real = criterion(output, label)
-            errD_real.backward()
-            D_x = output.mean().item()
+            if loss_type == 'bce':
+                # BCE Loss training
+                bce_criterion = nn.BCELoss()
+                # Train with real batch (with label smoothing)
+                label = torch.full((b_size,), real_label_smooth, dtype=torch.float, device=device)
+                output_real = discriminator(real_images_device)
+                errD_real = bce_criterion(output_real, label)
+                errD_real.backward()
+                D_x = output_real.mean().item()
 
-            # Train with fake batch
-            noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
-            fake = generator(noise)
-            label.fill_(fake_label_smooth)
-            output = discriminator(fake.detach())
-            errD_fake = criterion(output, label)
-            errD_fake.backward()
-            D_G_z1 = output.mean().item()
+                # Train with fake batch
+                noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
+                fake = generator(noise)
+                label.fill_(fake_label_smooth)
+                output_fake = discriminator(fake.detach())
+                errD_fake = bce_criterion(output_fake, label)
+                errD_fake.backward()
+                D_G_z1 = output_fake.mean().item()
 
-            errD = errD_real + errD_fake
+                errD = errD_real + errD_fake
+                
+            elif loss_type == 'hinge':
+                # Hinge Loss training
+                output_real = discriminator(real_images_device)
+                noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
+                fake = generator(noise)
+                output_fake = discriminator(fake.detach())
+                
+                errD = discriminator_hinge_loss(output_real, output_fake)
+                errD.backward()
+                
+                D_x = output_real.mean().item()
+                D_G_z1 = output_fake.mean().item()
+
             # Gradient clipping for stability
             torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
             optimizerD.step()
 
         ############################
-        # (2) Update G network: maximize log(D(G(z)))
+        # (2) Update G network
         ###########################
         for _ in range(g_steps):
             generator.zero_grad()
             noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
             fake = generator(noise)
-            # Generator wants discriminator to think fakes are real (label = 1.0, not smoothed)
-            label.fill_(1.0)
             output = discriminator(fake)
-            errG = criterion(output, label)
+            
+            if loss_type == 'bce':
+                # BCE Loss: Generator wants discriminator to think fakes are real (label = 1.0)
+                bce_criterion = nn.BCELoss()
+                label = torch.full((b_size,), 1.0, dtype=torch.float, device=device)
+                errG = bce_criterion(output, label)
+            elif loss_type == 'hinge':
+                # Hinge Loss: Maximize discriminator output
+                errG = generator_hinge_loss(output)
+            
             errG.backward()
             D_G_z2 = output.mean().item()
             # Gradient clipping for stability
