@@ -226,30 +226,36 @@ class StyleGAN2Generator(nn.Module):
         # Map to W space
         w = self.mapping(z)
         
+        # For path length regularization, we need w to have gradients
+        if return_latents:
+            w_for_grad = w.clone().requires_grad_(True)
+        else:
+            w_for_grad = w
+        
         # Start from constant
         batch = z.shape[0]
         x = self.constant.repeat(batch, 1, 1, 1)
         
         # Synthesis network with progressive RGB outputs
-        x = self.conv1(x, w)
+        x = self.conv1(x, w_for_grad)
         
-        x = self.conv2(x, w)
-        x = self.conv3(x, w)
+        x = self.conv2(x, w_for_grad)
+        x = self.conv3(x, w_for_grad)
         
-        x = self.conv4(x, w)
-        x = self.conv5(x, w)
+        x = self.conv4(x, w_for_grad)
+        x = self.conv5(x, w_for_grad)
         
-        x = self.conv6(x, w)
-        x = self.conv7(x, w)
+        x = self.conv6(x, w_for_grad)
+        x = self.conv7(x, w_for_grad)
         
-        x = self.conv8(x, w)
-        x = self.conv9(x, w)
-        rgb = self.to_rgb5(x, w)
+        x = self.conv8(x, w_for_grad)
+        x = self.conv9(x, w_for_grad)
+        rgb = self.to_rgb5(x, w_for_grad)
         
         rgb = torch.tanh(rgb)  # Output in [-1, 1]
         
         if return_latents:
-            return rgb, w
+            return rgb, w_for_grad
         return rgb
 
 
@@ -564,7 +570,8 @@ def g_path_regularize(fake_img, latents, mean_path_length, decay=0.01):
     grad, = torch.autograd.grad(
         outputs=(fake_img * noise).sum(), inputs=latents, create_graph=True
     )
-    path_lengths = torch.sqrt(grad.pow(2).sum(2).mean(1))
+    # latents is (batch, style_dim), so we sum over style_dim (dim=1)
+    path_lengths = torch.sqrt(grad.pow(2).sum(1))
     
     path_mean = mean_path_length + decay * (path_lengths.mean() - mean_path_length)
     
