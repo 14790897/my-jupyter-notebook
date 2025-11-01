@@ -155,6 +155,7 @@ train_transform = transforms.Compose([
     # Minimal augmentation - only flips for better FID
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     # Removed: ColorJitter can hurt image quality metrics
     # Removed: Rotation and Affine transforms (not suitable for particle data)
     transforms.ToTensor(),
@@ -797,7 +798,7 @@ else:
 generator_eval.eval()
 
 print("Generating images...")
-num_images = 100
+num_images = 500
 with torch.no_grad():
     for i in range(num_images):
         noise = torch.randn(1, latent_dim, 1, 1, device=device)

@@ -188,39 +188,49 @@ class ToRGB(nn.Module):
 
 class StyleGAN2Generator(nn.Module):
     """
-    StyleGAN2 Generator
+    StyleGAN2 Generator (Optimized for small datasets)
     Reference: Karras et al. "Analyzing and Improving the Image Quality of StyleGAN" (2020)
+
+    Modifications for small dataset (300 images):
+    - Reduced style_dim: 512 -> 256
+    - Reduced mapping network layers: 8 -> 4
+    - Reduced channel counts throughout
     """
-    def __init__(self, latent_dim=128, style_dim=512, n_channels=1):
+    def __init__(self, latent_dim=128, style_dim=256, n_channels=1):
         super().__init__()
         self.latent_dim = latent_dim
         self.style_dim = style_dim
-        
-        # Mapping network
-        self.mapping = MappingNetwork(latent_dim, style_dim, n_layers=8)
-        
-        # Constant input
-        self.constant = nn.Parameter(torch.randn(1, 512, 4, 4))
-        
-        # Synthesis network
-        self.conv1 = StyledConvBlock(512, 512, style_dim)
-        self.to_rgb1 = ToRGB(512, style_dim, n_channels)
-        
-        self.conv2 = StyledConvBlock(512, 512, style_dim, upsample=True)  # 4->8
-        self.conv3 = StyledConvBlock(512, 512, style_dim)
-        self.to_rgb2 = ToRGB(512, style_dim, n_channels)
-        
-        self.conv4 = StyledConvBlock(512, 256, style_dim, upsample=True)  # 8->16
-        self.conv5 = StyledConvBlock(256, 256, style_dim)
-        self.to_rgb3 = ToRGB(256, style_dim, n_channels)
-        
-        self.conv6 = StyledConvBlock(256, 128, style_dim, upsample=True)  # 16->32
-        self.conv7 = StyledConvBlock(128, 128, style_dim)
-        self.to_rgb4 = ToRGB(128, style_dim, n_channels)
-        
-        self.conv8 = StyledConvBlock(128, 64, style_dim, upsample=True)   # 32->64
-        self.conv9 = StyledConvBlock(64, 64, style_dim)
-        self.to_rgb5 = ToRGB(64, style_dim, n_channels)
+
+        # Mapping network - REDUCED layers for small dataset
+        self.mapping = MappingNetwork(latent_dim, style_dim, n_layers=4)
+
+        # Constant input - REDUCED channels
+        self.constant = nn.Parameter(torch.randn(1, 256, 4, 4))
+
+        # Synthesis network - REDUCED channel counts
+        # 4x4
+        self.conv1 = StyledConvBlock(256, 256, style_dim)
+        self.to_rgb1 = ToRGB(256, style_dim, n_channels)
+
+        # 4->8
+        self.conv2 = StyledConvBlock(256, 256, style_dim, upsample=True)
+        self.conv3 = StyledConvBlock(256, 256, style_dim)
+        self.to_rgb2 = ToRGB(256, style_dim, n_channels)
+
+        # 8->16
+        self.conv4 = StyledConvBlock(256, 128, style_dim, upsample=True)
+        self.conv5 = StyledConvBlock(128, 128, style_dim)
+        self.to_rgb3 = ToRGB(128, style_dim, n_channels)
+
+        # 16->32
+        self.conv6 = StyledConvBlock(128, 64, style_dim, upsample=True)
+        self.conv7 = StyledConvBlock(64, 64, style_dim)
+        self.to_rgb4 = ToRGB(64, style_dim, n_channels)
+
+        # 32->64
+        self.conv8 = StyledConvBlock(64, 32, style_dim, upsample=True)
+        self.conv9 = StyledConvBlock(32, 32, style_dim)
+        self.to_rgb5 = ToRGB(32, style_dim, n_channels)
 
     def forward(self, z, return_latents=False):
         # Map to W space
@@ -261,31 +271,39 @@ class StyleGAN2Generator(nn.Module):
 
 class StyleGAN2Discriminator(nn.Module):
     """
-    StyleGAN2 Discriminator with residual connections
+    StyleGAN2 Discriminator (Optimized for small datasets)
+
+    Modifications for small dataset (300 images):
+    - Reduced channel counts to prevent overfitting
+    - Maintains residual structure
     """
     def __init__(self, n_channels=1):
         super().__init__()
-        
-        # From RGB
-        self.from_rgb = EqualizedConv2d(n_channels, 64, 1)
-        
-        # Residual blocks
-        self.conv1 = EqualizedConv2d(64, 64, 3, padding=1)
-        self.conv2 = EqualizedConv2d(64, 128, 3, padding=1)
-        
-        self.conv3 = EqualizedConv2d(128, 128, 3, padding=1)
-        self.conv4 = EqualizedConv2d(128, 256, 3, padding=1)
-        
-        self.conv5 = EqualizedConv2d(256, 256, 3, padding=1)
-        self.conv6 = EqualizedConv2d(256, 512, 3, padding=1)
-        
-        self.conv7 = EqualizedConv2d(512, 512, 3, padding=1)
-        self.conv8 = EqualizedConv2d(512, 512, 3, padding=1)
-        
+
+        # From RGB - REDUCED initial channels
+        self.from_rgb = EqualizedConv2d(n_channels, 32, 1)
+
+        # Residual blocks with REDUCED channel counts
+        # 64x64 -> 32x32
+        self.conv1 = EqualizedConv2d(32, 64, 3, padding=1)
+        self.conv2 = EqualizedConv2d(64, 64, 3, padding=1)
+
+        # 32x32 -> 16x16
+        self.conv3 = EqualizedConv2d(64, 128, 3, padding=1)
+        self.conv4 = EqualizedConv2d(128, 128, 3, padding=1)
+
+        # 16x16 -> 8x8
+        self.conv5 = EqualizedConv2d(128, 256, 3, padding=1)
+        self.conv6 = EqualizedConv2d(256, 256, 3, padding=1)
+
+        # 8x8 -> 4x4
+        self.conv7 = EqualizedConv2d(256, 256, 3, padding=1)
+        self.conv8 = EqualizedConv2d(256, 256, 3, padding=1)
+
         # Final layers
-        self.final_conv = EqualizedConv2d(512, 512, 4)
-        self.final_linear = EqualizedLinear(512, 1)
-        
+        self.final_conv = EqualizedConv2d(256, 256, 4)
+        self.final_linear = EqualizedLinear(256, 1)
+
         self.activation = nn.LeakyReLU(0.2)
 
     def forward(self, x):
@@ -335,19 +353,21 @@ class StyleGAN2Discriminator(nn.Module):
 
 # %% [code]
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-batch_size = 8  # StyleGAN2 typically uses smaller batches
-learning_rate_g = 0.002  # StyleGAN2 uses higher LR for G
-learning_rate_d = 0.002  # StyleGAN2 uses higher LR for D
-num_epochs = 2000
+# Optimized parameters for small dataset (300 images)
+batch_size = 16  # Increased for better gradient estimation
+learning_rate_g = 0.001  # Reduced to prevent overfitting
+learning_rate_d = 0.001  # Reduced to prevent overfitting
+num_epochs = 3000  # More epochs for small dataset
 image_size = 64
 latent_dim = 128  # Z space dimension
-style_dim = 512   # W space dimension
+style_dim = 256   # W space dimension - REDUCED from 512 for small dataset
 nc = 1  # Grayscale
 
-# StyleGAN2 specific parameters
-r1_gamma = 10.0  # R1 regularization weight
-path_length_penalty = 2.0  # Path length regularization weight
-lazy_regularization = 16  # Apply regularization every N steps
+# StyleGAN2 specific parameters - tuned for small dataset
+r1_gamma = 5.0  # R1 regularization weight - reduced
+path_length_penalty = 1.0  # Path length regularization weight - reduced
+lazy_regularization = 8  # Apply regularization more frequently
+ema_decay = 0.999  # EMA decay rate for generator
 
 # %% [markdown]
 # ## 数据准备和加载
@@ -410,13 +430,20 @@ print(f"Completed! {count} images saved to {target_dir}")
 # ## 数据加载
 
 # %% [code]
+# Enhanced data augmentation for small dataset
+# Conservative augmentation suitable for particle detection
 train_transform = transforms.Compose([
     transforms.Resize((image_size, image_size)),
     transforms.Grayscale(num_output_channels=nc),
+    # Only use augmentations that preserve particle physics properties
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
+    # Brightness/contrast changes to simulate different imaging conditions
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor(),
-    transforms.Normalize([0.5] * nc, [0.5] * nc)
+    transforms.Normalize([0.5] * nc, [0.5] * nc),
+    # Random erasing simulates occlusion/noise
+    transforms.RandomErasing(p=0.2, scale=(0.02, 0.1))
 ])
 
 train_dataset = datasets.ImageFolder(root='./train', transform=train_transform)
@@ -449,6 +476,61 @@ def show_batch(dl, n_images=64, nrow=8):
         break
 
 show_batch(train_loader, n_images=min(64, batch_size * 8), nrow=8)
+
+# %% [markdown]
+# ## Differentiable Augmentation (DiffAugment)
+
+# %% [code]
+def DiffAugment(x, policy='color,translation,cutout'):
+    """
+    Differentiable Augmentation for Data-Efficient GAN Training
+    Reference: Zhao et al. "Training Generative Adversarial Networks with Limited Data" (NeurIPS 2020)
+
+    This is critical for small datasets (like 300 images) to prevent overfitting.
+    """
+    if policy:
+        if 'color' in policy:
+            # Color jittering
+            x = x + (torch.rand(x.size(0), 1, 1, 1, dtype=x.dtype, device=x.device) - 0.5)
+            x = torch.clamp(x, -1, 1)
+
+        if 'translation' in policy:
+            # Random translation (12.5% of image size)
+            shift_x, shift_y = int(x.size(2) * 0.125), int(x.size(3) * 0.125)
+            translation_x = torch.randint(-shift_x, shift_x + 1, size=[x.size(0), 1, 1], device=x.device)
+            translation_y = torch.randint(-shift_y, shift_y + 1, size=[x.size(0), 1, 1], device=x.device)
+
+            grid_batch, grid_x, grid_y = torch.meshgrid(
+                torch.arange(x.size(0), dtype=torch.long, device=x.device),
+                torch.arange(x.size(2), dtype=torch.long, device=x.device),
+                torch.arange(x.size(3), dtype=torch.long, device=x.device),
+                indexing='ij'
+            )
+            grid_x = torch.clamp(grid_x + translation_x + 1, 0, x.size(2) + 1)
+            grid_y = torch.clamp(grid_y + translation_y + 1, 0, x.size(3) + 1)
+            x_pad = F.pad(x, [1, 1, 1, 1, 0, 0, 0, 0])
+            x = x_pad.permute(0, 2, 3, 1).contiguous()[grid_batch, grid_x, grid_y].permute(0, 3, 1, 2).contiguous()
+
+        if 'cutout' in policy:
+            # Random cutout (50% of image size)
+            cutout_size = int(x.size(2) * 0.5)
+            offset_x = torch.randint(0, x.size(2) + (1 - cutout_size % 2), size=[x.size(0), 1, 1], device=x.device)
+            offset_y = torch.randint(0, x.size(3) + (1 - cutout_size % 2), size=[x.size(0), 1, 1], device=x.device)
+
+            grid_batch, grid_x, grid_y = torch.meshgrid(
+                torch.arange(x.size(0), dtype=torch.long, device=x.device),
+                torch.arange(cutout_size, dtype=torch.long, device=x.device),
+                torch.arange(cutout_size, dtype=torch.long, device=x.device),
+                indexing='ij'
+            )
+            grid_x = torch.clamp(grid_x + offset_x - cutout_size // 2, min=0, max=x.size(2) - 1)
+            grid_y = torch.clamp(grid_y + offset_y - cutout_size // 2, min=0, max=x.size(3) - 1)
+            mask = torch.ones(x.size(0), x.size(2), x.size(3), dtype=x.dtype, device=x.device)
+            mask[grid_batch, grid_x, grid_y] = 0
+            x = x * mask.unsqueeze(1)
+
+    return x
+
 
 # %% [markdown]
 # ## FID Calculation
@@ -609,12 +691,20 @@ os.makedirs('./stylegan2_images', exist_ok=True)
 # Fixed noise for visualization
 fixed_noise = torch.randn(64, latent_dim, device=device)
 
+# ⭐ Create EMA generator for better image quality
+from copy import deepcopy
+g_ema = deepcopy(generator).eval()
+requires_grad(g_ema, False)
+
 print("=" * 60)
-print("Starting StyleGAN2 Training")
+print("Starting StyleGAN2 Training (Optimized for Small Dataset)")
 print("=" * 60)
 print(f"Target: FID < 50")
+print(f"Dataset size: ~300 images")
 print(f"Batch size: {batch_size}")
 print(f"Learning rate G: {learning_rate_g}, D: {learning_rate_d}")
+print(f"Using DiffAugment: YES (critical for small datasets)")
+print(f"Using EMA: YES (decay={ema_decay})")
 print("=" * 60)
 
 for epoch in range(num_epochs):
@@ -624,68 +714,85 @@ for epoch in range(num_epochs):
     for i, (real_images, _) in enumerate(train_loader):
         real_images = real_images.to(device)
         b_size = real_images.size(0)
-        
+
         # ==========================================
         # Train Discriminator
         # ==========================================
         requires_grad(generator, False)
         requires_grad(discriminator, True)
-        
+
         # Generate fake images
         noise = torch.randn(b_size, latent_dim, device=device)
         fake_images = generator(noise)
-        
-        # Discriminator predictions
-        real_pred = discriminator(real_images)
-        fake_pred = discriminator(fake_images.detach())
-        
+
+        # ⭐ Apply DiffAugment to BOTH real and fake images
+        real_images_aug = DiffAugment(real_images, policy='color,translation,cutout')
+        fake_images_aug = DiffAugment(fake_images, policy='color,translation,cutout')
+
+        # Discriminator predictions on augmented images
+        real_pred = discriminator(real_images_aug)
+        fake_pred = discriminator(fake_images_aug.detach())
+
         # Discriminator loss
         d_loss = d_logistic_loss(real_pred, fake_pred)
-        
+
         discriminator.zero_grad()
         d_loss.backward()
         optimizerD.step()
-        
-        # R1 regularization (lazy)
+
+        # R1 regularization (lazy) - apply to original real images
         if i % lazy_regularization == 0:
             real_images.requires_grad = True
             real_pred = discriminator(real_images)
             r1_loss = d_r1_loss(real_pred, real_images)
-            
+
             discriminator.zero_grad()
             (r1_gamma / 2 * r1_loss * lazy_regularization).backward()
             optimizerD.step()
-        
+
         # ==========================================
         # Train Generator
         # ==========================================
         requires_grad(generator, True)
         requires_grad(discriminator, False)
-        
+
         noise = torch.randn(b_size, latent_dim, device=device)
         fake_images, latents = generator(noise, return_latents=True)
-        
-        fake_pred = discriminator(fake_images)
+
+        # ⭐ Apply DiffAugment to fake images
+        fake_images_aug = DiffAugment(fake_images, policy='color,translation,cutout')
+
+        fake_pred = discriminator(fake_images_aug)
         g_loss = g_nonsaturating_loss(fake_pred)
-        
+
         generator.zero_grad()
         g_loss.backward()
         optimizerG.step()
-        
+
+        # ⭐ Update EMA generator
+        with torch.no_grad():
+            for p_ema, p in zip(g_ema.parameters(), generator.parameters()):
+                p_ema.copy_(p.lerp(p_ema, ema_decay))
+
         # Path length regularization (lazy)
         if i % lazy_regularization == 0:
             noise = torch.randn(b_size, latent_dim, device=device)
             fake_images, latents = generator(noise, return_latents=True)
-            
+
             path_loss, mean_path_length = g_path_regularize(
                 fake_images, latents, mean_path_length
             )
-            
+
             generator.zero_grad()
             weighted_path_loss = path_length_penalty * path_loss
             if weighted_path_loss.item() > 0:
                 (weighted_path_loss * lazy_regularization).backward()
             optimizerG.step()
+
+            # ⭐ Update EMA after path regularization too
+            with torch.no_grad():
+                for p_ema, p in zip(g_ema.parameters(), generator.parameters()):
+                    p_ema.copy_(p.lerp(p_ema, ema_decay))
         
         # Track losses
         G_losses.append(g_loss.item())
@@ -707,14 +814,14 @@ for epoch in range(num_epochs):
     avg_g_loss = epoch_g_loss / len(train_loader)
     print(f'\nEpoch {epoch} Summary: Avg D Loss: {avg_d_loss:.4f}, Avg G Loss: {avg_g_loss:.4f}\n')
     
-    # Save sample images
+    # Save sample images - use EMA generator for best quality
     if (epoch % 10 == 0) or (epoch == num_epochs-1):
         with torch.no_grad():
-            fake = generator(fixed_noise).detach().cpu()
+            fake = g_ema(fixed_noise).detach().cpu()
         save_image(fake, f'./stylegan2_images/fake_samples_epoch_{epoch:03d}.png',
                    normalize=True, nrow=8)
-    
-    # Calculate FID
+
+    # Calculate FID - use EMA generator
     should_calc_fid = False
     if epoch < 200:
         should_calc_fid = (epoch % 10 == 0 and epoch > 0)
@@ -722,11 +829,11 @@ for epoch in range(num_epochs):
         should_calc_fid = (epoch % 20 == 0)
     else:
         should_calc_fid = (epoch % 50 == 0)
-    
+
     if should_calc_fid or (epoch == num_epochs-1):
         print(f"\nCalculating FID score for epoch {epoch}...")
         current_fid = calculate_fid(
-            generator=generator,
+            generator=g_ema,  # ⭐ Use EMA generator for FID
             real_data_path=real_data_path,
             device=device,
             latent_dim=latent_dim,
@@ -736,30 +843,34 @@ for epoch in range(num_epochs):
             dims=2048
         )
         fid_scores.append((epoch, current_fid))
-        
+
         if len(fid_scores) > 1:
             prev_fid = fid_scores[-2][1]
             improvement = prev_fid - current_fid
             print(f"Epoch {epoch} - FID Score: {current_fid:.4f} (Change: {improvement:+.4f})")
         else:
             print(f"Epoch {epoch} - FID Score: {current_fid:.4f}")
-        
-        # Save best model
+
+        # Save best model - save both regular and EMA
         if current_fid < best_fid:
             improvement_from_best = best_fid - current_fid
             best_fid = current_fid
             print(f"🎯 New best FID score: {best_fid:.4f} (Improved by {improvement_from_best:.4f})")
             print(f"   Saving best model...")
             torch.save(generator.state_dict(), './stylegan2_weights/generator_best_fid.pth')
+            torch.save(g_ema.state_dict(), './stylegan2_weights/generator_ema_best_fid.pth')  # ⭐ Save EMA
             torch.save(discriminator.state_dict(), './stylegan2_weights/discriminator_best_fid.pth')
             with open('./stylegan2_weights/best_fid_info.txt', 'w') as f:
                 f.write(f"Best FID Score: {best_fid:.4f}\n")
                 f.write(f"Epoch: {epoch}\n")
                 f.write(f"Learning Rate: {schedulerG.get_last_lr()[0]:.6f}\n")
-    
+                f.write(f"Using EMA: True\n")
+                f.write(f"Using DiffAugment: True\n")
+
     # Save checkpoints
     if (epoch % 100 == 0 and epoch > 0) or (epoch == num_epochs-1):
         torch.save(generator.state_dict(), f'./stylegan2_weights/generator_epoch_{epoch}.pth')
+        torch.save(g_ema.state_dict(), f'./stylegan2_weights/generator_ema_epoch_{epoch}.pth')  # ⭐ Save EMA
         torch.save(discriminator.state_dict(), f'./stylegan2_weights/discriminator_epoch_{epoch}.pth')
 
 print("=" * 60)
@@ -849,18 +960,23 @@ generated_images_dir = './stylegan2_generated'
 os.makedirs(generated_images_dir, exist_ok=True)
 
 generator_eval = StyleGAN2Generator(latent_dim=latent_dim, style_dim=style_dim, n_channels=nc).to(device)
-best_model_path = './stylegan2_weights/generator_best_fid.pth'
+best_model_path = './stylegan2_weights/generator_ema_best_fid.pth'  # ⭐ Use EMA model
 
 if os.path.exists(best_model_path):
-    print(f"Loading best model (FID: {best_fid:.4f})...")
+    print(f"Loading best EMA model (FID: {best_fid:.4f})...")
     generator_eval.load_state_dict(torch.load(best_model_path))
 else:
-    print(f"Best model not found, loading final epoch model...")
-    generator_eval.load_state_dict(torch.load(f'./stylegan2_weights/generator_epoch_{num_epochs-1}.pth'))
+    print(f"EMA model not found, trying regular best model...")
+    fallback_path = './stylegan2_weights/generator_best_fid.pth'
+    if os.path.exists(fallback_path):
+        generator_eval.load_state_dict(torch.load(fallback_path))
+    else:
+        print(f"No best model found, loading final epoch model...")
+        generator_eval.load_state_dict(torch.load(f'./stylegan2_weights/generator_ema_epoch_{num_epochs-1}.pth'))
 
 generator_eval.eval()
 
-print("Generating images with StyleGAN2...")
+print("Generating images with StyleGAN2 (EMA)...")
 num_images = 100
 with torch.no_grad():
     for i in range(num_images):
