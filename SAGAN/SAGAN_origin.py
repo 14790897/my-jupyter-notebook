@@ -207,28 +207,28 @@ show_batch(train_loader, n_images=64, nrow=8)
 # ## FID compute method
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-29T08:47:20.789251Z","iopub.execute_input":"2025-10-29T08:47:20.789532Z","iopub.status.idle":"2025-10-29T08:47:20.797502Z","shell.execute_reply.started":"2025-10-29T08:47:20.789510Z","shell.execute_reply":"2025-10-29T08:47:20.796777Z"},"jupyter":{"outputs_hidden":false}}
-def calculate_kid(generator, real_data_path, device, latent_dim, 
-                  num_gen_images=2000, eval_gen_batch_size=64):
+def calculate_kid_and_fid(generator, real_data_path, device, latent_dim, 
+                          num_gen_images=2000, eval_gen_batch_size=64):
     """
-    在训练期间计算KID分数 (使用 torch_fidelity)。
+    在训练期间同时计算KID和FID分数 (使用 torch_fidelity)。
     
     :param generator: 当前的生成器模型。
     :param real_data_path: 真实图片所在的目录 (例如 './train/data')。
     :param device: torch.device ('cuda' 或 'cpu')。
     :param latent_dim: 潜在向量的维度。
-    :param num_gen_images: 要生成多少张图片来计算KID。
+    :param num_gen_images: 要生成多少张图片来计算KID和FID。
     :param eval_gen_batch_size: 生成图片时的批量大小。
-    :return: (float) 计算出的KID分数。
+    :return: (float, float) 计算出的KID和FID分数。
     """
     from torch_fidelity import calculate_metrics
     
     # --- 1. 创建临时文件夹保存生成的图片 ---
-    gen_dir = './kid_temp_generated'
+    gen_dir = './metrics_temp_generated'
     if os.path.exists(gen_dir):
         shutil.rmtree(gen_dir)  # 清理旧的
     os.makedirs(gen_dir)
     
-    print(f"Generating {num_gen_images} images for KID calculation...")
+    print(f"Generating {num_gen_images} images for KID and FID calculation...")
     
     # --- 2. 生成并保存图片 ---
     generator.eval()  # 切换到评估模式
@@ -252,9 +252,9 @@ def calculate_kid(generator, real_data_path, device, latent_dim,
             
             count += current_batch_size
 
-    print("Generation complete. Calculating KID...")
+    print("Generation complete. Calculating KID and FID...")
 
-    # --- 3. 计算KID ---
+    # --- 3. 同时计算KID和FID ---
     try:
         # 计算实际图片数量用于确定subset_size
         import glob
@@ -267,24 +267,30 @@ def calculate_kid(generator, real_data_path, device, latent_dim,
         
         print(f"Using KID subset size: {kid_subset_size}")
         
+        # 同时计算KID和FID
         metrics = calculate_metrics(
             input1=gen_dir,
             input2=real_data_path,
             cuda=(device.type == 'cuda'),
             kid=True,
+            fid=True,
             kid_subset_size=kid_subset_size,
             verbose=False
         )
         kid_value = metrics['kernel_inception_distance_mean']
+        fid_value = metrics['frechet_inception_distance']
+        
+        print(f"✓ KID: {kid_value:.6f}, FID: {fid_value:.4f}")
     except Exception as e:
-        print(f"KID calculation error: {e}")
+        print(f"Metrics calculation error: {e}")
         kid_value = float('inf')
+        fid_value = float('inf')
     
     # --- 4. 清理并恢复模式 ---
     shutil.rmtree(gen_dir)  # 删除临时文件夹
     generator.train()  # 恢复到训练模式
     
-    return kid_value
+    return kid_value, fid_value
 
 # %% [markdown] {"papermill":{"duration":0.037989,"end_time":"2021-10-09T06:31:39.325346","exception":false,"start_time":"2021-10-09T06:31:39.287357","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
 # 
@@ -585,9 +591,11 @@ D_losses = []
 img_list = []
 iters = 0
 
-# KID tracking (changed from FID)
+# KID and FID tracking
 best_kid = float('inf')  # Initialize with infinity
+best_fid = float('inf')  # Initialize with infinity
 kid_scores = []  # Track KID scores over epochs
+fid_scores = []  # Track FID scores over epochs
 
 # Create directories for saving results
 os.makedirs('./dcgan_weights', exist_ok=True)
@@ -694,39 +702,44 @@ for epoch in range(num_epochs):
         should_calc_kid = (epoch % 50 == 0)  # Every 50 epochs after 800
     
     if should_calc_kid or (epoch == num_epochs-1):
-        print(f"\nCalculating KID score for epoch {epoch}...")
-        current_kid = calculate_kid(
+        print(f"\nCalculating KID and FID scores for epoch {epoch}...")
+        current_kid, current_fid = calculate_kid_and_fid(
             generator=generator,
             real_data_path=real_data_path,
             device=device,
             latent_dim=latent_dim,
-            num_gen_images=500,  # More samples for better KID estimation
+            num_gen_images=500,  # More samples for better metrics estimation
             eval_gen_batch_size=32
         )
         kid_scores.append((epoch, current_kid))
+        fid_scores.append((epoch, current_fid))
         
         # Calculate improvement
         if len(kid_scores) > 1:
             prev_kid = kid_scores[-2][1]
-            improvement = prev_kid - current_kid
-            print(f"Epoch {epoch} - KID Score: {current_kid:.6f} (Change: {improvement:+.6f})")
+            prev_fid = fid_scores[-2][1]
+            kid_improvement = prev_kid - current_kid
+            fid_improvement = prev_fid - current_fid
+            print(f"Epoch {epoch} - KID: {current_kid:.6f} (Δ{kid_improvement:+.6f}), FID: {current_fid:.4f} (Δ{fid_improvement:+.4f})")
         else:
-            print(f"Epoch {epoch} - KID Score: {current_kid:.6f}")
+            print(f"Epoch {epoch} - KID: {current_kid:.6f}, FID: {current_fid:.4f}")
 
-        # Save model if it has the best KID score so far
+        # Save model if it has the best KID score so far (using KID as primary metric)
         if current_kid < best_kid:
-            improvement_from_best = best_kid - current_kid
+            improvement_from_best_kid = best_kid - current_kid
             best_kid = current_kid
-            print(f"🎯 New best KID score: {best_kid:.6f} (Improved by {improvement_from_best:.6f})")
+            best_fid = current_fid  # Also update best FID
+            print(f"🎯 New best scores! KID: {best_kid:.6f} (↓{improvement_from_best_kid:.6f}), FID: {best_fid:.4f}")
             print(f"   Saving best model...")
             torch.save(generator.state_dict(), './dcgan_weights/generator_best_kid.pth')
             torch.save(discriminator.state_dict(), './dcgan_weights/discriminator_best_kid.pth')
             # Save epoch info
-            with open('./dcgan_weights/best_kid_info.txt', 'w') as f:
+            with open('./dcgan_weights/best_metrics_info.txt', 'w') as f:
                 f.write(f"Best KID Score: {best_kid:.6f}\n")
+                f.write(f"Corresponding FID Score: {best_fid:.4f}\n")
                 if baseline_kid is not None:
                     f.write(f"Baseline KID (Dataset Internal): {baseline_kid:.6f}\n")
-                    f.write(f"Note: Using KID metric for evaluation\n")
+                f.write(f"Note: Using KID as primary metric, FID as secondary\n")
                 f.write(f"Epoch: {epoch}\n")
                 f.write(f"Learning Rate: {schedulerG.get_last_lr()[0]:.6f}\n")
 
@@ -737,14 +750,17 @@ for epoch in range(num_epochs):
 
 print("Training Complete!")
 print("=" * 50)
-print(f"Best KID Score Achieved: {best_kid:.6f}")
+print(f"Best Scores Achieved:")
+print(f"  • KID: {best_kid:.6f}")
+print(f"  • FID: {best_fid:.4f}")
 print(f"Best model saved at: ./dcgan_weights/generator_best_kid.pth")
 
 # 与基线KID对比
 if baseline_kid is not None:
-    print(f"\n📊 Metric Summary:")
+    print(f"\n📊 Metrics Summary:")
     print(f"   Baseline KID (Dataset Internal): {baseline_kid:.6f}")
     print(f"   Best Generated KID: {best_kid:.6f}")
+    print(f"   Best Generated FID: {best_fid:.4f}")
     if best_kid < baseline_kid:
         diff = baseline_kid - best_kid
         print(f"   🎉 EXCELLENT! Generator KID is {diff:.6f} better than baseline!")
@@ -754,22 +770,22 @@ if baseline_kid is not None:
     else:
         diff = best_kid - baseline_kid
         print(f"   ⚠️ Generator KID is {diff:.6f} above baseline (needs improvement)")
-    print(f"   Note: Using KID metric for evaluation (lower is better)")
+    print(f"   Note: Using KID as primary metric, FID as secondary (both lower is better)")
 
-if best_kid < 0.01:
-    print("\n🎉 SUCCESS! Excellent KID score achieved!")
-elif best_kid < 0.05:
-    print("\n✓ Great progress! Good KID score.")
+if best_kid < 0.01 and best_fid < 50:
+    print("\n🎉 SUCCESS! Excellent KID and FID scores achieved!")
+elif best_kid < 0.05 or best_fid < 60:
+    print("\n✓ Great progress! Good scores.")
 else:
     print("\n⚠ Consider training longer or adjusting hyperparameters.")
 print("=" * 50)
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
-# Plot the training losses
-plt.figure(figsize=(15, 5))
+# Plot the training losses and metrics
+plt.figure(figsize=(20, 5))
 
 # Subplot 1: Losses
-plt.subplot(1, 2, 1)
+plt.subplot(1, 3, 1)
 plt.title("Generator and Discriminator Loss During Training")
 plt.plot(G_losses, label="G")
 plt.plot(D_losses, label="D")
@@ -780,13 +796,27 @@ plt.grid(True)
 
 # Subplot 2: KID Scores
 if len(kid_scores) > 0:
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2)
     epochs_kid, scores_kid = zip(*kid_scores)
     plt.title("KID Score During Training")
-    plt.plot(epochs_kid, scores_kid, marker='o', color='green')
-    plt.axhline(y=best_kid, color='r', linestyle='--', label=f'Best KID: {best_kid:.6f}')
+    plt.plot(epochs_kid, scores_kid, marker='o', color='green', linewidth=2)
+    plt.axhline(y=best_kid, color='r', linestyle='--', linewidth=2, label=f'Best KID: {best_kid:.6f}')
+    if baseline_kid is not None:
+        plt.axhline(y=baseline_kid, color='orange', linestyle=':', linewidth=2, label=f'Baseline KID: {baseline_kid:.6f}')
     plt.xlabel("Epoch")
     plt.ylabel("KID Score")
+    plt.legend()
+    plt.grid(True)
+
+# Subplot 3: FID Scores
+if len(fid_scores) > 0:
+    plt.subplot(1, 3, 3)
+    epochs_fid, scores_fid = zip(*fid_scores)
+    plt.title("FID Score During Training")
+    plt.plot(epochs_fid, scores_fid, marker='s', color='blue', linewidth=2)
+    plt.axhline(y=best_fid, color='r', linestyle='--', linewidth=2, label=f'Best FID: {best_fid:.4f}')
+    plt.xlabel("Epoch")
+    plt.ylabel("FID Score")
     plt.legend()
     plt.grid(True)
 
