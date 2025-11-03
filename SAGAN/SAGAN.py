@@ -1130,7 +1130,7 @@ else:
 generator_eval.eval()
 
 print("Generating images...")
-num_images = 500
+num_images = 600
 with torch.no_grad():
     for i in range(num_images):
         noise = torch.randn(1, latent_dim, 1, 1, device=device)

@@ -62,9 +62,7 @@ ndf = 64  # Number of discriminator filters
 # Training strategy parameters
 d_steps = 1  # Discriminator steps per generator step
 g_steps = 1  # Balanced training (1:1 ratio)
-# Label smoothing for better training stability
-real_label_smooth = 0.9  # Real labels = 0.9 instead of 1.0
-fake_label_smooth = 0.0  # Fake labels = 0.0
+# Note: Hinge Loss doesn't use label smoothing
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # ## data prepare
@@ -149,7 +147,7 @@ train_transform = transforms.Compose([
     # Minimal augmentation - only flips for better FID
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
-    transforms.ColorJitter(brightness=0.3, contrast=0.3),
+    # transforms.ColorJitter(brightness=0.3, contrast=0.3),
     # Removed: ColorJitter can hurt image quality metrics
     # Removed: Rotation and Affine transforms (not suitable for particle data)
     transforms.ToTensor(),
@@ -422,8 +420,8 @@ class Discriminator(nn.Module):
         # State size: (ndf*8) x 4 x 4
 
         self.layer5 = nn.Sequential(
-            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
-            nn.Sigmoid()
+            nn.utils.spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False))
+            # No Sigmoid for Hinge Loss (need raw logits)
         )
         # State size: 1 x 1 x 1
 
@@ -445,22 +443,21 @@ print(discriminator)
 summary(discriminator, (1,64,64))
 
 # %% [code] {"id":"RFxQC7T0laZi","papermill":{"duration":0.045481,"end_time":"2021-10-09T06:31:44.228253","exception":false,"start_time":"2021-10-09T06:31:44.182772","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.619849Z","iopub.execute_input":"2025-10-29T08:47:21.620138Z","iopub.status.idle":"2025-10-29T08:47:21.623842Z","shell.execute_reply.started":"2025-10-29T08:47:21.620115Z","shell.execute_reply":"2025-10-29T08:47:21.623267Z"},"jupyter":{"outputs_hidden":false}}
-# Binary Cross Entropy Loss for DCGAN
-criterion = nn.BCELoss()
+# Hinge Loss for SAGAN (no need for nn.BCELoss)
+# Discriminator Hinge Loss: E[min(0, -1 + D(x_real))] + E[min(0, -1 - D(x_fake))]
+# Generator Hinge Loss: -E[D(x_fake)]
 
 # %% [markdown] {"papermill":{"duration":0.063915,"end_time":"2021-10-09T06:31:44.635401","exception":false,"start_time":"2021-10-09T06:31:44.571486","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
-# ## The discriminator loss has:
+# ## Hinge Loss for SAGAN:
 # 
-# - real (original images) output predictions, ground truth label as 1
-# - fake (generated images) output predictions, ground truth label as 0.
+# - Discriminator: maximize min(0, -1 + D(x_real)) + min(0, -1 - D(x_fake))
+# - Generator: maximize D(x_fake) (or minimize -D(x_fake))
 
 # %% [code] {"papermill":{"duration":0.072788,"end_time":"2021-10-09T06:31:44.772757","exception":false,"start_time":"2021-10-09T06:31:44.699969","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.678607Z","iopub.execute_input":"2025-10-29T08:47:21.679095Z","iopub.status.idle":"2025-10-29T08:47:21.690955Z","shell.execute_reply.started":"2025-10-29T08:47:21.679077Z","shell.execute_reply":"2025-10-29T08:47:21.690370Z"},"jupyter":{"outputs_hidden":false}}
 # Fixed noise for visualization
 fixed_noise = torch.randn(64, latent_dim, 1, 1, device=device)
 
-# Labels
-real_label = 1.0
-fake_label = 0.0
+# Note: Hinge Loss doesn't need label values
 
 # %% [code] {"id":"sis4zEVQkLf_","papermill":{"duration":0.077416,"end_time":"2021-10-09T06:31:44.914779","exception":false,"start_time":"2021-10-09T06:31:44.837363","status":"completed"},"tags":[],"execution":{"iopub.status.busy":"2025-10-29T08:47:21.691736Z","iopub.execute_input":"2025-10-29T08:47:21.691961Z","iopub.status.idle":"2025-10-29T08:47:21.708059Z","shell.execute_reply.started":"2025-10-29T08:47:21.691947Z","shell.execute_reply":"2025-10-29T08:47:21.707301Z"},"jupyter":{"outputs_hidden":false}}
 # Setup Adam optimizers for both G and D
@@ -606,8 +603,9 @@ schedulerD = optim.lr_scheduler.StepLR(optimizerD, step_size=500, gamma=0.5)
 schedulerG = optim.lr_scheduler.StepLR(optimizerG, step_size=500, gamma=0.5)
 
 print("Starting Optimized SAGAN (Self-Attention GAN) Training Loop...")
-print(f"Architecture: DCGAN backbone + Self-Attention mechanism")
-print(f"Target: FID < 50")
+print(f"Architecture: DCGAN backbone + Self-Attention + Spectral Normalization")
+print(f"Loss Function: Hinge Loss (recommended for SAGAN)")
+print(f"Target: KID < 0.05, FID < 50")
 print("-" * 50)
 
 for epoch in range(num_epochs):
@@ -616,28 +614,27 @@ for epoch in range(num_epochs):
 
     for i, (real_images, _) in enumerate(train_loader):
         ############################
-        # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+        # (1) Update D network with Hinge Loss
+        # Hinge Loss: E[min(0, -1 + D(x_real))] + E[min(0, -1 - D(x_fake))]
         ###########################
         for _ in range(d_steps):
             discriminator.zero_grad()
             real_images_device = real_images.to(device)
             b_size = real_images_device.size(0)
 
-            # Train with real batch (with label smoothing)
-            label = torch.full((b_size,), real_label_smooth, dtype=torch.float, device=device)
-            output = discriminator(real_images_device)
-            errD_real = criterion(output, label)
+            # Train with real batch using Hinge Loss
+            output_real = discriminator(real_images_device)
+            errD_real = torch.nn.functional.relu(1.0 - output_real).mean()
             errD_real.backward()
-            D_x = output.mean().item()
+            D_x = output_real.mean().item()
 
-            # Train with fake batch
+            # Train with fake batch using Hinge Loss
             noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
             fake = generator(noise)
-            label.fill_(fake_label_smooth)
-            output = discriminator(fake.detach())
-            errD_fake = criterion(output, label)
+            output_fake = discriminator(fake.detach())
+            errD_fake = torch.nn.functional.relu(1.0 + output_fake).mean()
             errD_fake.backward()
-            D_G_z1 = output.mean().item()
+            D_G_z1 = output_fake.mean().item()
 
             errD = errD_real + errD_fake
             # Gradient clipping for stability
@@ -645,16 +642,16 @@ for epoch in range(num_epochs):
             optimizerD.step()
 
         ############################
-        # (2) Update G network: maximize log(D(G(z)))
+        # (2) Update G network with Hinge Loss
+        # Generator Loss: -E[D(x_fake)]
         ###########################
         for _ in range(g_steps):
             generator.zero_grad()
             noise = torch.randn(b_size, latent_dim, 1, 1, device=device)
             fake = generator(noise)
-            # Generator wants discriminator to think fakes are real (label = 1.0, not smoothed)
-            label.fill_(1.0)
+            # Generator wants to maximize discriminator output (minimize negative output)
             output = discriminator(fake)
-            errG = criterion(output, label)
+            errG = -output.mean()
             errG.backward()
             D_G_z2 = output.mean().item()
             # Gradient clipping for stability
@@ -924,6 +921,50 @@ with torch.no_grad():
         pil_image_resized.save(save_path)
 
 print(f"Generated {num_images} images (160x160) in {generated_images_dir}")
+
+# %% [code] {"jupyter":{"outputs_hidden":false}}
+# Create compressed archive of generated images
+import zipfile
+from datetime import datetime
+
+print("\n" + "=" * 50)
+print("📦 Creating compressed archive...")
+print("=" * 50)
+
+# Create archive filename with timestamp
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+archive_name = f'generated_images_{timestamp}.zip'
+archive_path = os.path.join('./', archive_name)
+
+try:
+    with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+        # Add all generated images to the archive
+        image_files = [f for f in os.listdir(generated_images_dir) 
+                      if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        
+        for idx, img_file in enumerate(image_files, 1):
+            img_path = os.path.join(generated_images_dir, img_file)
+            # Add file to zip with relative path (without full directory structure)
+            zipf.write(img_path, arcname=img_file)
+            
+            # Silent progress (only show every 100 images)
+            if idx % 100 == 0 or idx == len(image_files):
+                print(f"  Packed {idx}/{len(image_files)} images...", end='\r')
+        
+        print()  # New line after progress
+    
+    # Get archive size
+    archive_size_mb = os.path.getsize(archive_path) / (1024 * 1024)
+    
+    print(f"\n✅ Archive created successfully!")
+    print(f"   File: {archive_path}")
+    print(f"   Size: {archive_size_mb:.2f} MB")
+    print(f"   Images: {len(image_files)}")
+    print("=" * 50 + "\n")
+    
+except Exception as e:
+    print(f"❌ Error creating archive: {e}")
+    print("=" * 50 + "\n")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
 display_multiple_img(getImagePaths(generated_images_dir))
