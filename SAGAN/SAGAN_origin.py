@@ -967,6 +967,94 @@ except Exception as e:
     print("=" * 50 + "\n")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
+# Final Evaluation: Compare generated images with original training data (160x160)
+print("\n" + "=" * 50)
+print("🎯 FINAL EVALUATION: Generated vs Original Training Data")
+print("=" * 50)
+print("Comparing generated 160x160 images with original 160x160 training data")
+print("Note: Training used augmented data (flips), but evaluation uses original images\n")
+
+# Prepare original training data directory (160x160, without augmentation)
+original_train_data = './train/data'  # Original 160x160 images
+
+# Count original images
+original_count = sum(1 for f in os.listdir(original_train_data) 
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')))
+
+print(f"Original training images (160x160): {original_count}")
+print(f"Generated images (160x160): {num_images}")
+
+# Calculate FID between generated 160x160 and original 160x160
+print("\nCalculating FID score (160x160 vs 160x160)...")
+try:
+    from torch_fidelity import calculate_metrics
+    
+    metrics_160 = calculate_metrics(
+        input1=generated_images_dir,  # Generated 160x160 images
+        input2=original_train_data,    # Original 160x160 images
+        cuda=torch.cuda.is_available(),
+        fid=True,
+        kid=True,
+        kid_subset_size=min(400, min(num_images, original_count)),
+        verbose=False
+    )
+    
+    final_fid_160 = metrics_160['frechet_inception_distance']
+    final_kid_160 = metrics_160['kernel_inception_distance_mean']
+    
+    print(f"\n✅ Final Metrics (160x160 comparison):")
+    print(f"   FID Score: {final_fid_160:.4f}")
+    print(f"   KID Score: {final_kid_160:.6f}")
+    
+    # Compare with training metrics (which used 64x64)
+    print(f"\n📊 Comparison Summary:")
+    print(f"   During Training (64x64 comparison):")
+    print(f"     - Best FID: {best_fid:.4f}")
+    print(f"     - Best KID: {best_kid:.6f}")
+    print(f"   Final Evaluation (160x160 comparison):")
+    print(f"     - FID: {final_fid_160:.4f}")
+    print(f"     - KID: {final_kid_160:.6f}")
+    
+    # Quality assessment
+    print(f"\n🎯 Quality Assessment:")
+    if final_fid_160 < 50 and final_kid_160 < 0.05:
+        print("   🎉 EXCELLENT! Generated images match original distribution very well!")
+    elif final_fid_160 < 70 and final_kid_160 < 0.1:
+        print("   ✓ GOOD! Generated images have good quality.")
+    elif final_fid_160 < 100:
+        print("   ⚠ MODERATE. Generated images show some differences from originals.")
+    else:
+        print("   ⚠ Generated images differ significantly from originals.")
+    
+    # Save final evaluation results
+    with open('./dcgan_weights/final_evaluation_160x160.txt', 'w') as f:
+        f.write("=" * 50 + "\n")
+        f.write("FINAL EVALUATION: 160x160 Generated vs Original\n")
+        f.write("=" * 50 + "\n\n")
+        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write(f"Comparison Details:\n")
+        f.write(f"  - Generated Images: {num_images} (160x160, upscaled with LANCZOS)\n")
+        f.write(f"  - Original Images: {original_count} (160x160, without augmentation)\n\n")
+        f.write(f"Final Metrics (160x160 comparison):\n")
+        f.write(f"  - FID Score: {final_fid_160:.4f}\n")
+        f.write(f"  - KID Score: {final_kid_160:.6f}\n\n")
+        f.write(f"Training Metrics (64x64 comparison):\n")
+        f.write(f"  - Best FID: {best_fid:.4f}\n")
+        f.write(f"  - Best KID: {best_kid:.6f}\n")
+        if baseline_kid is not None:
+            f.write(f"  - Baseline KID: {baseline_kid:.6f}\n")
+        f.write("\n" + "=" * 50 + "\n")
+    
+    print(f"\n✅ Evaluation results saved to: ./dcgan_weights/final_evaluation_160x160.txt")
+    
+except Exception as e:
+    print(f"\n❌ Error during final evaluation: {e}")
+    import traceback
+    traceback.print_exc()
+
+print("=" * 50 + "\n")
+
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 display_multiple_img(getImagePaths(generated_images_dir))
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
