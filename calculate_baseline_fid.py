@@ -11,13 +11,14 @@
     python calculate_baseline_fid.py --data_path ./train/data --split 0.5 --seed 42
 """
 
-import os
-import sys
+import argparse
 import glob
+import os
 import random
 import shutil
-import argparse
+import sys
 from pathlib import Path
+
 from torch_fidelity import calculate_metrics
 
 
@@ -141,16 +142,16 @@ def calculate_baseline_fid(data_path, test_split=0.5, seed=42, verbose=True):
             print(f"✅ Baseline FID (Dataset Internal): {baseline_fid:.4f}")
             print("=" * 60)
             print("\n📊 Interpretation:")
-            print(f"   • This represents the 'best possible' FID for this dataset")
-            print(f"   • Your generator should aim to achieve FID close to or below this value")
+            print("   • This represents the 'best possible' FID for this dataset")
+            print("   • Your generator should aim to achieve FID close to or below this value")
             
             # 提供解释
             if baseline_fid < 20:
-                print(f"   • 🟢 Low baseline FID: Dataset is very consistent")
+                print("   • 🟢 Low baseline FID: Dataset is very consistent")
             elif baseline_fid < 50:
-                print(f"   • 🟡 Medium baseline FID: Dataset has moderate diversity")
+                print("   • 🟡 Medium baseline FID: Dataset has moderate diversity")
             else:
-                print(f"   • 🔴 High baseline FID: Dataset has high diversity or quality variance")
+                print("   • 🔴 High baseline FID: Dataset has high diversity or quality variance")
             
             print("\n💡 Guidelines:")
             print(f"   • Generator FID < {baseline_fid:.2f}: 🎉 Excellent!")
@@ -255,7 +256,7 @@ Examples:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
             with open(output_path, 'w') as f:
-                f.write(f"Baseline FID Calculation Results\n")
+                f.write("Baseline FID Calculation Results\n")
                 f.write("=" * 60 + "\n\n")
                 f.write(f"Dataset Path: {args.data_path}\n")
                 f.write(f"Split Ratio: {args.split}\n")

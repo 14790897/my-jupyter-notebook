@@ -8,7 +8,6 @@
 
 import os
 import subprocess
-import sys
 
 
 def test_calculate_baseline_fid():
@@ -82,7 +81,7 @@ def test_calculate_baseline_fid():
             
             if baseline_fid is not None:
                 print(f"\n✅ 基线 FID: {baseline_fid:.4f}")
-                print(f"\n生成器性能目标:")
+                print("\n生成器性能目标:")
                 print(f"  - 优秀: < {baseline_fid:.2f}")
                 print(f"  - 良好: < {baseline_fid * 1.5:.2f}")
                 print(f"  - 一般: < {baseline_fid * 2:.2f}")
