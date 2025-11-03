@@ -862,16 +862,38 @@ else:
 generator_eval.eval()
 
 print("Generating images...")
-num_images = 100
+num_images = 600
+
+from PIL import Image
+import torchvision.transforms.functional as TF
+
 with torch.no_grad():
     for i in range(num_images):
         noise = torch.randn(1, latent_dim, 1, 1, device=device)
         fake_image = generator_eval(noise)
+        
+        # 转换为 PIL 图像并使用高质量插值放大到 160x160
+        # 首先反归一化：从 [-1, 1] 转到 [0, 1]
+        fake_image_normalized = (fake_image + 1) / 2.0
+        fake_image_normalized = torch.clamp(fake_image_normalized, 0, 1)
+        
+        # 转换为 PIL 图像
+        pil_image = TF.to_pil_image(fake_image_normalized.squeeze(0).cpu())
+        
+        # 使用 LANCZOS 插值放大到 160x160（最高质量）
+        # PIL.Image.LANCZOS 在新版本中被重命名为 PIL.Image.Resampling.LANCZOS
+        try:
+            pil_image_resized = pil_image.resize((160, 160), Image.Resampling.LANCZOS)
+        except AttributeError:
+            # 兼容旧版本 PIL
+            pil_image_resized = pil_image.resize((160, 160), Image.LANCZOS)
+            print("Warning: Using deprecated PIL.Image.LANCZOS. Consider updating Pillow library.")
+        
+        # 保存
         save_path = os.path.join(generated_images_dir, f'generated_{i:04d}.png')
-        # 明确指定 value_range=(-1, 1)，因为生成器使用 Tanh() 激活
-        save_image(fake_image, save_path, normalize=True, value_range=(-1, 1))
+        pil_image_resized.save(save_path)
 
-print(f"Generated {num_images} images in {generated_images_dir}")
+print(f"Generated {num_images} images (160x160) in {generated_images_dir}")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
 display_multiple_img(getImagePaths(generated_images_dir))
