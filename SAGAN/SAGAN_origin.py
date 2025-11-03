@@ -967,85 +967,125 @@ except Exception as e:
     print("=" * 50 + "\n")
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
-# Final Evaluation: Compare generated images with original training data (160x160)
+# Final Evaluation: Compare generated images with real data at 64x64 (same as training)
 print("\n" + "=" * 50)
-print("🎯 FINAL EVALUATION: Generated vs Original Training Data")
+print("🎯 FINAL EVALUATION: Generated vs Real Data (64×64)")
 print("=" * 50)
-print("Comparing generated 160x160 images with original 160x160 training data")
-print("Note: Training used augmented data (flips), but evaluation uses original images\n")
+print("Using the same 64×64 comparison as training for consistent evaluation")
+print("Note: This ensures fair comparison with training metrics\n")
 
-# Prepare original training data directory (160x160, without augmentation)
-original_train_data = './train/data'  # Original 160x160 images
+# Use the same 64x64 real data path as training
+final_real_data_path = real_data_path  # './real_images_64x64_for_fid'
 
-# Count original images
-original_count = sum(1 for f in os.listdir(original_train_data) 
+# Count real images
+real_count_64 = sum(1 for f in os.listdir(final_real_data_path) 
                     if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')))
 
-print(f"Original training images (160x160): {original_count}")
-print(f"Generated images (160x160): {num_images}")
+print(f"Real images (64×64): {real_count_64}")
+print(f"Generated images count: {num_images}")
 
-# Calculate FID between generated 160x160 and original 160x160
-print("\nCalculating FID score (160x160 vs 160x160)...")
+# Generate 64x64 images for final evaluation (without upscaling)
+print("\nGenerating 64×64 images for final evaluation...")
+final_eval_dir = './final_eval_generated_64x64'
+if os.path.exists(final_eval_dir):
+    shutil.rmtree(final_eval_dir)
+os.makedirs(final_eval_dir)
+
+generator_eval.eval()
+with torch.no_grad():
+    for i in range(num_images):
+        noise = torch.randn(1, latent_dim, 1, 1, device=device)
+        fake_image = generator_eval(noise)
+        save_path = os.path.join(final_eval_dir, f'eval_{i:04d}.png')
+        # Save as 64x64 (no upscaling), with proper value_range
+        save_image(fake_image, save_path, normalize=True, value_range=(-1, 1))
+
+print(f"Generated {num_images} images at 64×64 for evaluation")
+
+# Calculate FID and KID at 64x64
+print("\nCalculating FID and KID scores (64×64 vs 64×64)...")
 try:
     from torch_fidelity import calculate_metrics
     
-    metrics_160 = calculate_metrics(
-        input1=generated_images_dir,  # Generated 160x160 images
-        input2=original_train_data,    # Original 160x160 images
+    # Calculate kid_subset_size
+    kid_subset_size = int(min(num_images, real_count_64) * 0.8)
+    kid_subset_size = max(100, kid_subset_size)
+    
+    metrics_final = calculate_metrics(
+        input1=final_eval_dir,        # Generated 64x64 images
+        input2=final_real_data_path,  # Real 64x64 images
         cuda=torch.cuda.is_available(),
         fid=True,
         kid=True,
-        kid_subset_size=min(400, min(num_images, original_count)),
+        kid_subset_size=kid_subset_size,
         verbose=False
     )
     
-    final_fid_160 = metrics_160['frechet_inception_distance']
-    final_kid_160 = metrics_160['kernel_inception_distance_mean']
+    final_fid = metrics_final['frechet_inception_distance']
+    final_kid = metrics_final['kernel_inception_distance_mean']
     
-    print(f"\n✅ Final Metrics (160x160 comparison):")
-    print(f"   FID Score: {final_fid_160:.4f}")
-    print(f"   KID Score: {final_kid_160:.6f}")
+    print(f"\n✅ Final Evaluation Metrics (64×64 comparison):")
+    print(f"   FID Score: {final_fid:.4f}")
+    print(f"   KID Score: {final_kid:.6f}")
     
-    # Compare with training metrics (which used 64x64)
-    print(f"\n📊 Comparison Summary:")
-    print(f"   During Training (64x64 comparison):")
-    print(f"     - Best FID: {best_fid:.4f}")
-    print(f"     - Best KID: {best_kid:.6f}")
-    print(f"   Final Evaluation (160x160 comparison):")
-    print(f"     - FID: {final_fid_160:.4f}")
-    print(f"     - KID: {final_kid_160:.6f}")
+    # Compare with training metrics
+    print(f"\n📊 Comparison with Training:")
+    print(f"   Best During Training:")
+    print(f"     - FID: {best_fid:.4f}")
+    print(f"     - KID: {best_kid:.6f}")
+    print(f"   Final Evaluation:")
+    print(f"     - FID: {final_fid:.4f} (Δ{final_fid - best_fid:+.4f})")
+    print(f"     - KID: {final_kid:.6f} (Δ{final_kid - best_kid:+.6f})")
     
     # Quality assessment
     print(f"\n🎯 Quality Assessment:")
-    if final_fid_160 < 50 and final_kid_160 < 0.05:
-        print("   🎉 EXCELLENT! Generated images match original distribution very well!")
-    elif final_fid_160 < 70 and final_kid_160 < 0.1:
+    if final_fid < 50 and final_kid < 0.05:
+        print("   🎉 EXCELLENT! Generated images match real distribution very well!")
+    elif final_fid < 70 and final_kid < 0.1:
         print("   ✓ GOOD! Generated images have good quality.")
-    elif final_fid_160 < 100:
-        print("   ⚠ MODERATE. Generated images show some differences from originals.")
+    elif final_fid < 100:
+        print("   ⚠ MODERATE. Generated images show some differences from real data.")
     else:
-        print("   ⚠ Generated images differ significantly from originals.")
+        print("   ⚠ Generated images differ significantly from real data.")
+    
+    # Consistency check
+    fid_diff = abs(final_fid - best_fid)
+    kid_diff = abs(final_kid - best_kid)
+    print(f"\n📈 Consistency Check:")
+    if fid_diff < 5 and kid_diff < 0.01:
+        print("   ✅ Excellent consistency with training metrics!")
+    elif fid_diff < 10 and kid_diff < 0.02:
+        print("   ✓ Good consistency with training metrics.")
+    else:
+        print("   ⚠ Some variation from training metrics (expected for different evaluation runs).")
     
     # Save final evaluation results
-    with open('./dcgan_weights/final_evaluation_160x160.txt', 'w') as f:
+    with open('./dcgan_weights/final_evaluation_64x64.txt', 'w') as f:
         f.write("=" * 50 + "\n")
-        f.write("FINAL EVALUATION: 160x160 Generated vs Original\n")
+        f.write("FINAL EVALUATION: 64×64 Generated vs Real Data\n")
         f.write("=" * 50 + "\n\n")
         f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        f.write(f"Comparison Details:\n")
-        f.write(f"  - Generated Images: {num_images} (160x160, upscaled with LANCZOS)\n")
-        f.write(f"  - Original Images: {original_count} (160x160, without augmentation)\n\n")
-        f.write(f"Final Metrics (160x160 comparison):\n")
-        f.write(f"  - FID Score: {final_fid_160:.4f}\n")
-        f.write(f"  - KID Score: {final_kid_160:.6f}\n\n")
-        f.write(f"Training Metrics (64x64 comparison):\n")
+        f.write(f"Evaluation Details:\n")
+        f.write(f"  - Generated Images: {num_images} (64×64, native resolution)\n")
+        f.write(f"  - Real Images: {real_count_64} (64×64, from training set)\n\n")
+        f.write(f"Final Evaluation Metrics (64×64 comparison):\n")
+        f.write(f"  - FID Score: {final_fid:.4f}\n")
+        f.write(f"  - KID Score: {final_kid:.6f}\n\n")
+        f.write(f"Best Training Metrics (64×64 comparison):\n")
         f.write(f"  - Best FID: {best_fid:.4f}\n")
         f.write(f"  - Best KID: {best_kid:.6f}\n")
         if baseline_kid is not None:
             f.write(f"  - Baseline KID: {baseline_kid:.6f}\n")
+        f.write(f"\nConsistency:\n")
+        f.write(f"  - FID Difference: {fid_diff:.4f}\n")
+        f.write(f"  - KID Difference: {kid_diff:.6f}\n")
         f.write("\n" + "=" * 50 + "\n")
     
-    print(f"\n✅ Evaluation results saved to: ./dcgan_weights/final_evaluation_160x160.txt")
+    print(f"\n✅ Evaluation results saved to: ./dcgan_weights/final_evaluation_64x64.txt")
+    
+    # Clean up temporary evaluation directory
+    shutil.rmtree(final_eval_dir)
+    print(f"✅ Cleaned up temporary evaluation files")
     
 except Exception as e:
     print(f"\n❌ Error during final evaluation: {e}")
