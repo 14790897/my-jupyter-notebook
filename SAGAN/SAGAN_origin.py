@@ -1,5 +1,5 @@
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-29T08:45:36.175246Z","iopub.execute_input":"2025-10-29T08:45:36.175473Z","iopub.status.idle":"2025-10-29T08:47:17.862566Z","shell.execute_reply.started":"2025-10-29T08:45:36.175428Z","shell.execute_reply":"2025-10-29T08:47:17.861917Z"},"jupyter":{"outputs_hidden":false}}
-!pip install pytorch-fid
+!pip install torch-fidelity
 import os
 import torch
 import numpy as np
@@ -149,6 +149,7 @@ train_transform = transforms.Compose([
     # Minimal augmentation - only flips for better FID
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomVerticalFlip(p=0.5),
+    transforms.ColorJitter(brightness=0.3, contrast=0.3),
     # Removed: ColorJitter can hurt image quality metrics
     # Removed: Rotation and Affine transforms (not suitable for particle data)
     transforms.ToTensor(),
