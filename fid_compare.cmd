@@ -1,1 +1,0 @@
-python -m pytorch_fid "C:\Users\13963\Downloads\version9\generated_images" "C:\git-program\particle_detect\auto_generate\dataset\generated_images_2"
