@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 import datetime
 import matplotlib.pyplot as plt
-from pytorch_fid import fid_score  # 导入FID计算模块
+from torch_fidelity import calculate_metrics  # 导入FID计算模块
 import torch.nn.functional as F
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 # torch.manual_seed(1)
@@ -207,10 +207,9 @@ show_batch(train_loader, n_images=64, nrow=8)
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-29T08:47:20.789251Z","iopub.execute_input":"2025-10-29T08:47:20.789532Z","iopub.status.idle":"2025-10-29T08:47:20.797502Z","shell.execute_reply.started":"2025-10-29T08:47:20.789510Z","shell.execute_reply":"2025-10-29T08:47:20.796777Z"},"jupyter":{"outputs_hidden":false}}
 def calculate_fid(generator, real_data_path, device, latent_dim, 
-                  num_gen_images=2000, eval_gen_batch_size=64, 
-                  fid_calc_batch_size=50, dims=2048):
+                  num_gen_images=2000, eval_gen_batch_size=64):
     """
-    在训练期间计算FID分数。
+    在训练期间计算FID分数 (使用 torch_fidelity)。
     
     :param generator: 当前的生成器模型。
     :param real_data_path: 真实图片所在的目录 (例如 './train/data')。
@@ -218,10 +217,9 @@ def calculate_fid(generator, real_data_path, device, latent_dim,
     :param latent_dim: 潜在向量的维度。
     :param num_gen_images: 要生成多少张图片来计算FID。
     :param eval_gen_batch_size: 生成图片时的批量大小。
-    :param fid_calc_batch_size: FID计算器内部的批量大小。
-    :param dims: Inception V3 模型的特征维度 (2048 是标准)。
     :return: (float) 计算出的FID分数。
     """
+    from torch_fidelity import calculate_metrics
     
     # --- 1. 创建临时文件夹保存生成的图片 ---
     gen_dir = './fid_temp_generated'
@@ -245,25 +243,29 @@ def calculate_fid(generator, real_data_path, device, latent_dim,
             fake_images = generator(noise)
             
             # 保存这个批次的图片
+            # normalize=True: 将[-1, 1]转换为[0, 1]，然后保存为[0, 255]的PNG
+            # 这是torch_fidelity期望的标准输入格式
             for i in range(current_batch_size):
                 save_path = os.path.join(gen_dir, f'img_{count + i}.png')
-                save_image(fake_images[i], save_path, normalize=True)
+                save_image(fake_images[i], save_path, normalize=True, value_range=(-1, 1))
             
             count += current_batch_size
 
     print("Generation complete. Calculating FID...")
 
     # --- 3. 计算FID ---
-    # 定义两个路径
-    paths = [real_data_path, gen_dir]
-    
-    # 调用 pytorch-fid 模块
-    fid_value = fid_score.calculate_fid_given_paths(
-        paths=paths,
-        batch_size=fid_calc_batch_size,
-        device=device,
-        dims=dims
-    )
+    try:
+        metrics = calculate_metrics(
+            input1=gen_dir,
+            input2=real_data_path,
+            cuda=(device.type == 'cuda'),
+            fid=True,
+            verbose=False
+        )
+        fid_value = metrics['frechet_inception_distance']
+    except Exception as e:
+        print(f"FID calculation error: {e}")
+        fid_value = float('inf')
     
     # --- 4. 清理并恢复模式 ---
     shutil.rmtree(gen_dir)  # 删除临时文件夹
@@ -452,12 +454,110 @@ schedulerG = optim.lr_scheduler.CosineAnnealingLR(optimizerG, T_max=num_epochs, 
 
 # %% [markdown] {"papermill":{"duration":0.040677,"end_time":"2021-10-09T06:31:46.648014","exception":false,"start_time":"2021-10-09T06:31:46.607337","status":"completed"},"tags":[],"jupyter":{"outputs_hidden":false}}
 # 
+# <h2 style="text-align:center;font-weight: bold;">Calculate Baseline FID (Training Set Internal)</h2>
+
+# %% [code] {"jupyter":{"outputs_hidden":false}}
+def calculate_dataset_internal_fid(data_path, test_split=0.5):
+    """
+    计算数据集内部的FID（将数据集分成两半并计算它们之间的FID）
+    这可以作为FID评估的基线参考值
+    
+    :param data_path: 数据集路径
+    :param test_split: 用于第二个子集的比例（默认0.5，即对半分）
+    :return: 数据集内部的FID分数
+    """
+    from torch_fidelity import calculate_metrics
+    import glob
+    import random
+    
+    print("\n" + "=" * 50)
+    print("📊 Calculating Baseline FID (Training Set Internal)")
+    print("=" * 50)
+    
+    # 获取所有图像文件
+    image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp', '*.tiff']
+    all_images = []
+    for ext in image_extensions:
+        all_images.extend(glob.glob(os.path.join(data_path, ext)))
+    
+    total_images = len(all_images)
+    print(f"Total images found: {total_images}")
+    
+    if total_images < 100:
+        print("⚠️ Warning: Dataset too small for reliable FID calculation")
+        print("   Recommended: at least 100 images")
+        return None
+    
+    # 随机打乱并分割数据集
+    random.seed(42)  # 固定随机种子以保证可重复性
+    random.shuffle(all_images)
+    
+    split_idx = int(total_images * test_split)
+    subset1_images = all_images[:split_idx]
+    subset2_images = all_images[split_idx:]
+    
+    print(f"Subset 1: {len(subset1_images)} images")
+    print(f"Subset 2: {len(subset2_images)} images")
+    
+    # 创建临时目录
+    subset1_dir = './fid_baseline_subset1'
+    subset2_dir = './fid_baseline_subset2'
+    
+    # 清理旧的临时目录
+    if os.path.exists(subset1_dir):
+        shutil.rmtree(subset1_dir)
+    if os.path.exists(subset2_dir):
+        shutil.rmtree(subset2_dir)
+    
+    os.makedirs(subset1_dir)
+    os.makedirs(subset2_dir)
+    
+    # 复制文件到临时目录
+    print("Preparing subsets...")
+    for img_path in subset1_images:
+        shutil.copy(img_path, os.path.join(subset1_dir, os.path.basename(img_path)))
+    
+    for img_path in subset2_images:
+        shutil.copy(img_path, os.path.join(subset2_dir, os.path.basename(img_path)))
+    
+    # 计算FID
+    print("Calculating FID between two subsets...")
+    try:
+        metrics = calculate_metrics(
+            input1=subset1_dir,
+            input2=subset2_dir,
+            cuda=torch.cuda.is_available(),
+            fid=True,
+            verbose=False
+        )
+        baseline_fid = metrics['frechet_inception_distance']
+        
+        print(f"\n✅ Baseline FID (Dataset Internal): {baseline_fid:.4f}")
+        print(f"   This represents the 'best possible' FID for this dataset")
+        print(f"   Your generator should aim to achieve FID close to or below this value")
+        
+    except Exception as e:
+        print(f"❌ Error calculating baseline FID: {e}")
+        baseline_fid = None
+    
+    # 清理临时目录
+    shutil.rmtree(subset1_dir)
+    shutil.rmtree(subset2_dir)
+    
+    print("=" * 50 + "\n")
+    return baseline_fid
+
+# %% [markdown] {"jupyter":{"outputs_hidden":false}}
+# 
 # <h2 style="text-align:center;font-weight: bold;">Training our network</h2>
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-29T08:47:21.711536Z","iopub.execute_input":"2025-10-29T08:47:21.711839Z"},"jupyter":{"outputs_hidden":false}}
 import torch
 import os
 from torchvision.utils import save_image
+
+# 计算训练集内部的基线FID
+baseline_fid = calculate_dataset_internal_fid(real_data_path, test_split=0.5)
 
 # Lists to keep track of progress
 G_losses = []
@@ -561,7 +661,7 @@ for epoch in range(num_epochs):
         with torch.no_grad():
             fake = generator(fixed_noise).detach().cpu()
         save_image(fake, f'./dcgan_images/fake_samples_epoch_{epoch:03d}.png',
-                   normalize=True, nrow=8)
+                   normalize=True, value_range=(-1, 1), nrow=8)
 
     # Adaptive FID calculation frequency
     # More frequent early on, less frequent later
@@ -581,9 +681,7 @@ for epoch in range(num_epochs):
             device=device,
             latent_dim=latent_dim,
             num_gen_images=500,  # More samples for better FID estimation
-            eval_gen_batch_size=32,
-            fid_calc_batch_size=50,
-            dims=2048
+            eval_gen_batch_size=32
         )
         fid_scores.append((epoch, current_fid))
         
@@ -606,6 +704,9 @@ for epoch in range(num_epochs):
             # Save epoch info
             with open('./dcgan_weights/best_fid_info.txt', 'w') as f:
                 f.write(f"Best FID Score: {best_fid:.4f}\n")
+                if baseline_fid is not None:
+                    f.write(f"Baseline FID (Dataset Internal): {baseline_fid:.4f}\n")
+                    f.write(f"Difference from Baseline: {best_fid - baseline_fid:+.4f}\n")
                 f.write(f"Epoch: {epoch}\n")
                 f.write(f"Learning Rate: {schedulerG.get_last_lr()[0]:.6f}\n")
 
@@ -618,12 +719,28 @@ print("Training Complete!")
 print("=" * 50)
 print(f"Best FID Score Achieved: {best_fid:.4f}")
 print(f"Best model saved at: ./dcgan_weights/generator_best_fid.pth")
+
+# 与基线FID对比
+if baseline_fid is not None:
+    print(f"\n📊 FID Comparison:")
+    print(f"   Baseline FID (Dataset Internal): {baseline_fid:.4f}")
+    print(f"   Best Generated FID: {best_fid:.4f}")
+    if best_fid < baseline_fid:
+        diff = baseline_fid - best_fid
+        print(f"   🎉 EXCELLENT! Generator FID is {diff:.4f} better than baseline!")
+    elif best_fid < baseline_fid * 1.5:
+        diff = best_fid - baseline_fid
+        print(f"   ✓ Good! Generator FID is {diff:.4f} above baseline (within 1.5x)")
+    else:
+        diff = best_fid - baseline_fid
+        print(f"   ⚠️ Generator FID is {diff:.4f} above baseline (needs improvement)")
+
 if best_fid < 50:
-    print("🎉 SUCCESS! FID target (<50) achieved!")
+    print("\n🎉 SUCCESS! FID target (<50) achieved!")
 elif best_fid < 60:
-    print("✓ Great progress! Close to target.")
+    print("\n✓ Great progress! Close to target.")
 else:
-    print("⚠ Consider training longer or adjusting hyperparameters.")
+    print("\n⚠ Consider training longer or adjusting hyperparameters.")
 print("=" * 50)
 
 # %% [code] {"jupyter":{"outputs_hidden":false}}
@@ -730,7 +847,8 @@ with torch.no_grad():
         noise = torch.randn(1, latent_dim, 1, 1, device=device)
         fake_image = generator_eval(noise)
         save_path = os.path.join(generated_images_dir, f'generated_{i:04d}.png')
-        save_image(fake_image, save_path, normalize=True)
+        # 明确指定 value_range=(-1, 1)，因为生成器使用 Tanh() 激活
+        save_image(fake_image, save_path, normalize=True, value_range=(-1, 1))
 
 print(f"Generated {num_images} images in {generated_images_dir}")
 
