@@ -576,6 +576,10 @@ def evaluate(
         show_images: 是否显示图像
         show_only_errors: 如果为True，只显示预测错误的样本；如果为False，显示所有样本
     """
+    print(f"\n{'='*60}")
+    print(f"开始评估 - 数据集大小: {len(data_loader.dataset)}")
+    print(f"{'='*60}")
+    
     correct = 0
     total = 0
     all_preds = []
@@ -643,10 +647,29 @@ def evaluate(
     #                 )
 
     cm = confusion_matrix(all_labels, all_preds)
+    
+    # 获取实际出现的类别
+    unique_labels = sorted(set(all_labels) | set(all_preds))
+    
+    # 只使用实际出现的类别标签
+    actual_class_names = [class_names[i] if i < len(class_names) else str(i) for i in unique_labels]
+    
     fig, ax = plt.subplots(figsize=(10, 10))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=actual_class_names)
     disp.plot(cmap=plt.cm.Blues, ax=ax, values_format="d")
     plt.title("Confusion Matrix")
+    plt.tight_layout()
+    plt.show()
+    
+    # 检查是否只有一个类别
+    if len(unique_labels) < 2:
+        print(f"\n⚠️ 警告: 只检测到 {len(unique_labels)} 个类别")
+        print(f"   实际标签: {set(all_labels)}")
+        print(f"   预测标签: {set(all_preds)}")
+        print("   无法计算精度-召回率曲线（需要至少2个类别）")
+        print(f"Accuracy: {100 * correct / total}%")
+        return
+    
     # 计算精度和召回率
     precision, recall, _ = precision_recall_curve(all_labels, all_preds)
     average_precision = average_precision_score(all_labels, all_preds)
@@ -662,7 +685,31 @@ def evaluate(
     plt.grid()
     plt.show()
     #     wandb.log({"Confusion Matrix": wandb.Image(fig)})
-    print(f"Accuracy: {100 * correct / total}%")
+    
+    # 打印详细的统计信息
+    print(f"\n{'='*60}")
+    print(f"评估结果总结")
+    print(f"{'='*60}")
+    print(f"总样本数: {total}")
+    print(f"正确预测: {correct}")
+    print(f"错误预测: {total - correct}")
+    print(f"准确率: {100 * correct / total:.2f}%")
+    
+    # 按类别统计
+    from collections import Counter
+    label_counts = Counter(all_labels)
+    pred_counts = Counter(all_preds)
+    
+    print(f"\n真实标签分布:")
+    for label in sorted(label_counts.keys()):
+        label_name = class_names[label] if label < len(class_names) else str(label)
+        print(f"  {label_name}: {label_counts[label]} ({100*label_counts[label]/total:.1f}%)")
+    
+    print(f"\n预测标签分布:")
+    for label in sorted(pred_counts.keys()):
+        label_name = class_names[label] if label < len(class_names) else str(label)
+        print(f"  {label_name}: {pred_counts[label]} ({100*pred_counts[label]/total:.1f}%)")
+    print(f"{'='*60}\n")
 
 
 evaluate(model, val_loader, device, show_images=True)
