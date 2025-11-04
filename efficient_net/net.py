@@ -146,10 +146,10 @@ def set_seed(seed):
     # 保证一些操作的确定性
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
+fixed_seed = 42
 
 # 调用函数固定种子
-set_seed(1)
+set_seed(fixed_seed)
 
 import torch.nn as nn
 import torch.optim as optim
@@ -257,7 +257,7 @@ train_indices, val_indices = train_test_split(
     indices,
     test_size=1 - train_ratio,
     stratify=labels,  # 关键参数：按标签分层划分
-    random_state=42
+    random_state=fixed_seed,
 )
 
 # 打印每个类别的划分情况
@@ -463,7 +463,7 @@ def train_k_fold(
     save_path="/kaggle/working/best_model.pth",
     stop_threshold=1e-6,
 ):
-    kfold = KFold(n_splits=k, shuffle=True, random_state=42)
+    kfold = KFold(n_splits=k, shuffle=True, random_state=fixed_seed)
     best_accuracy = 0.0  # 用于保存最佳模型的精度
     best_val_loss = float("inf")  # 用于保存最小验证损失
 
