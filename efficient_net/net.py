@@ -261,6 +261,7 @@ train_indices, val_indices = train_test_split(
 
 # 打印每个类别的划分情况
 from collections import Counter
+
 train_labels = [labels[i] for i in train_indices]
 val_labels = [labels[i] for i in val_indices]
 
@@ -343,10 +344,19 @@ import torchvision
 
 # 显示一批图像
 def imshow(img, title=None):
-    img = img / 2 + 0.5  # 反归一化
+    # 正确的反归一化（针对 ImageNet 统计数据）
     np_img = img.numpy()
+    # 转置为 (H, W, C)
+    np_img = np.transpose(np_img, (1, 2, 0))
+    # ImageNet 的 mean 和 std
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    # 反归一化公式: img = img * std + mean
+    np_img = std * np_img + mean
+    np_img = np.clip(np_img, 0, 1)  # 将值限制在 [0, 1] 之间
+    
     plt.figure(figsize=(10, 5))
-    plt.imshow(np.transpose(np_img, (1, 2, 0)))  # 将 (C, H, W) 转为 (H, W, C)
+    plt.imshow(np_img)
     if title:
         plt.title(title)
     plt.show()
