@@ -509,7 +509,7 @@ train_model(
     optimizer, 
     train_loader, 
     val_loader, 
-    epochs=50,
+    epochs=150,
     save_path="/kaggle/working/best_model.pth"
 )
 
