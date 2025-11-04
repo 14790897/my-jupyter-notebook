@@ -153,7 +153,7 @@ set_seed(12)
 
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 from torchvision import transforms
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:45.819631Z","iopub.execute_input":"2025-10-28T14:27:45.820009Z","iopub.status.idle":"2025-10-28T14:28:02.778074Z","shell.execute_reply.started":"2025-10-28T14:27:45.81998Z","shell.execute_reply":"2025-10-28T14:28:02.777133Z"}}
@@ -503,7 +503,15 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # 训练选项1: 使用简单的训练/验证划分（推荐，因为验证集已经正确分离）
-train_model(model, criterion, optimizer, train_loader, val_loader, epochs=50)
+train_model(
+    model, 
+    criterion, 
+    optimizer, 
+    train_loader, 
+    val_loader, 
+    epochs=50,
+    save_path="/kaggle/working/best_model.pth"
+)
 
 # 训练选项2: 使用K折交叉验证（需要使用只包含真实数据的数据集）
 # 注意：K折交叉验证会在真实数据内部进行划分，不会用到GAN生成的数据
@@ -521,15 +529,26 @@ train_model(model, criterion, optimizer, train_loader, val_loader, epochs=50)
 # )
 
 # %% [code]
-# 重新加载 EfficientNet 模型
-# model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
-model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+# 重新加载训练好的模型（仅在训练完成后运行此单元格）
+import os
 
-model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
-model.load_state_dict(torch.load("best_model.pth", map_location=device))
+model_path = "/kaggle/working/best_model.pth"
 
-# 将模型转移到 GPU 或 CPU
-model = model.to(device)
+if os.path.exists(model_path):
+    print(f"加载已训练的模型: {model_path}")
+    # model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+    model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+    
+    model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    
+    # 将模型转移到 GPU 或 CPU
+    model = model.to(device)
+    print("✓ 模型加载成功")
+else:
+    print(f"⚠️ 模型文件不存在: {model_path}")
+    print("请先运行训练代码，训练完成后会自动保存模型")
+    print("如果已经训练完成，模型应该会在训练过程中自动使用（无需重新加载）")
 
 import torch
 
