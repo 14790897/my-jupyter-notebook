@@ -17,7 +17,11 @@ import os
 import random
 import shutil
 import sys
+import warnings
 from pathlib import Path
+
+# 过滤 torch_fidelity 中的 TypedStorage 弃用警告
+warnings.filterwarnings('ignore', category=UserWarning, message='.*TypedStorage is deprecated.*')
 
 from torch_fidelity import calculate_metrics
 

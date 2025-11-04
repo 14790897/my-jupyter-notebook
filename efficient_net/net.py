@@ -2,39 +2,46 @@
 import shutil
 from PIL import Image, ImageOps
 
+
 def process_images_in_directory(source_dir, target_dir):
     os.makedirs(target_dir, exist_ok=True)
     # 遍历源目录中的文件
     for file_name in os.listdir(source_dir):
         file_path = os.path.join(source_dir, file_name)
-        
+
         # 检查文件是否是图片
-        if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')):
+        if file_name.lower().endswith(
+            (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif")
+        ):
             # 打开图片
             img = Image.open(file_path)
-            
+
             # 保存原始图片到目标目录
             # original_save_path = os.path.join(target_dir, f'original_{file_name}')
             # img.save(original_save_path)
-            
+
             # 上下翻转
             flipped_up_down = ImageOps.flip(img)
-            flipped_up_down_save_path = os.path.join(target_dir, f'flipped_ud_{file_name}')
+            flipped_up_down_save_path = os.path.join(
+                target_dir, f"flipped_ud_{file_name}"
+            )
             flipped_up_down.save(flipped_up_down_save_path)
-            
+
             # 左右翻转
             flipped_left_right = ImageOps.mirror(img)
-            flipped_left_right_save_path = os.path.join(target_dir, f'flipped_lr_{file_name}')
+            flipped_left_right_save_path = os.path.join(
+                target_dir, f"flipped_lr_{file_name}"
+            )
             flipped_left_right.save(flipped_left_right_save_path)
-    
+
             # 90度旋转
             rotated_90 = img.rotate(90)  # 逆时针旋转90度
-            rotated_90_save_path = os.path.join(target_dir, f'rotated_90_{file_name}')
+            rotated_90_save_path = os.path.join(target_dir, f"rotated_90_{file_name}")
             rotated_90.save(rotated_90_save_path)
-    
+
             # 270度旋转
             rotated_270 = img.rotate(270)  # 逆时针旋转270度
-            rotated_270_save_path = os.path.join(target_dir, f'rotated_270_{file_name}')
+            rotated_270_save_path = os.path.join(target_dir, f"rotated_270_{file_name}")
             rotated_270.save(rotated_270_save_path)
 
 
@@ -42,6 +49,7 @@ def process_images_in_directory(source_dir, target_dir):
 import shutil
 import os
 from pathlib import Path
+
 
 def copy_files_with_prefix(source_map, destination_dir, recursive=False):
     """
@@ -62,51 +70,51 @@ def copy_files_with_prefix(source_map, destination_dir, recursive=False):
         - False (默认): 仅复制源文件夹根目录下的文件。
         - True: 递归搜索所有子文件夹，并将子文件夹路径扁平化作为文件名的一部分。
     """
-    
+
     # --- 1. 准备目标文件夹 ---
     dest_dir = Path(destination_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
     print(f"目标文件夹: {dest_dir}")
-    
+
     total_files_copied = 0
 
     # --- 2. 遍历所有源文件夹 ---
     for prefix, source_folder in source_map.items():
         source_path = Path(source_folder)
-        
+
         # 检查源文件夹是否存在
         if not source_path.is_dir():
             print(f"警告: 找不到源文件夹 {source_path}, 已跳过 (前缀: '{prefix}')。")
             continue
-        
+
         if recursive:
             print(f"处理: {source_path} (前缀: '{prefix}') [递归模式]")
             # .rglob('*') 会递归查找所有文件
-            iterator = source_path.rglob('*')
+            iterator = source_path.rglob("*")
         else:
             print(f"处理: {source_path} (前缀: '{prefix}') [非递归模式]")
             # .iterdir() 只遍历当前目录
             iterator = source_path.iterdir()
-            
+
         # --- 3. 遍历并复制文件 ---
         for file_path in iterator:
             # 确保我们只处理文件
             if file_path.is_file():
-                
+
                 if recursive:
                     # 获取 "subdir/image.png"
                     relative_path = file_path.relative_to(source_path)
                     # 转换 "subdir/image.png" -> "subdir_image.png"
-                    flat_name_part = str(relative_path).replace(os.path.sep, '_')
+                    flat_name_part = str(relative_path).replace(os.path.sep, "_")
                     new_filename = f"{prefix}_{flat_name_part}"
                 else:
                     # 非递归模式，直接获取文件名
                     # "image.png" -> "gen1_image.png"
                     new_filename = f"{prefix}_{file_path.name}"
-                
+
                 # 构造最终目标路径
                 dest_file = dest_dir / new_filename
-                
+
                 # 复制文件
                 shutil.copy(file_path, dest_file)
                 total_files_copied += 1
@@ -114,11 +122,13 @@ def copy_files_with_prefix(source_map, destination_dir, recursive=False):
     print(f"\n复制完成! 总共复制了 {total_files_copied} 个文件。")
     return total_files_copied
 
+
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.788589Z","iopub.execute_input":"2025-10-28T14:27:42.788924Z","iopub.status.idle":"2025-10-28T14:27:45.817803Z","shell.execute_reply.started":"2025-10-28T14:27:42.788886Z","shell.execute_reply":"2025-10-28T14:27:45.816809Z"}}
 # 固定随机种子
 import torch
 import random
 import numpy as np
+
 
 def set_seed(seed):
     # 固定 Python 的随机种子
@@ -134,6 +144,7 @@ def set_seed(seed):
     # 保证一些操作的确定性
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
 
 # 调用函数固定种子
 set_seed(12)
@@ -153,19 +164,22 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
 from tqdm.notebook import tqdm
-# 数据转换
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
 
-source_path = '/kaggle/input/efficientnet-data/data'
-my_label_data = '/kaggle/input/efficientnet-data/my_label_data'
-destination_path = './data'
-dataset_path = './train/data'
+# 数据转换
+transform = transforms.Compose(
+    [
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
+
+source_path = "/kaggle/input/efficientnet-data/data"
+my_label_data = "/kaggle/input/efficientnet-data/my_label_data"
+destination_path = "./data"
+dataset_path = "./train/data"
 
 if not os.path.exists(destination_path):
     os.makedirs(destination_path)
@@ -175,8 +189,8 @@ if not os.path.exists(destination_path):
 # 对一小部分数据进行旋转
 # process_images_in_directory(f'{my_label_data}/0',f'{destination_path}/0')
 # process_images_in_directory(f'{my_label_data}/1',f'{destination_path}/1')
-shutil.copytree(f'{my_label_data}/0', f'{destination_path}/0', dirs_exist_ok=True)
-shutil.copytree(f'{my_label_data}/1', f'{destination_path}/1', dirs_exist_ok=True)
+shutil.copytree(f"{my_label_data}/0", f"{destination_path}/0", dirs_exist_ok=True)
+shutil.copytree(f"{my_label_data}/1", f"{destination_path}/1", dirs_exist_ok=True)
 
 # 生成的单个粒子数据
 destination_folder = Path(destination_path) / "0"
@@ -186,7 +200,7 @@ sources_to_copy = {
     # 'gen1': Path('/kaggle/input/efficientnet-data/generated_images'),
     # 'gen2': Path('/kaggle/input/efficientnet-data/generated_images_2'),
     # 'gen3': Path('/kaggle/input/efficientnet-data/generated_images_3')
-    'gen1': Path('/kaggle/input/efficientnet-data/generated_images_20251104_015533')
+    "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
 }
 
 # --- 2. 执行复制 ---
@@ -195,18 +209,42 @@ sources_to_copy = {
 copy_files_with_prefix(sources_to_copy, destination_folder)
 
 # 新标注的数据，分离状态的数据较多
-shutil.copytree('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/0', f'{destination_path}/0', dirs_exist_ok=True)
-shutil.copytree('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/1', f'{destination_path}/1', dirs_exist_ok=True)
-shutil.copytree('/kaggle/input/efficientnet-data/efficient2/cropped_objects/0', f'{destination_path}/0', dirs_exist_ok=True)
-shutil.copytree('/kaggle/input/efficientnet-data/efficient2/cropped_objects/1', f'{destination_path}/1', dirs_exist_ok=True)
+shutil.copytree(
+    "/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/0",
+    f"{destination_path}/0",
+    dirs_exist_ok=True,
+)
+shutil.copytree(
+    "/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/1",
+    f"{destination_path}/1",
+    dirs_exist_ok=True,
+)
+shutil.copytree(
+    "/kaggle/input/efficientnet-data/efficient2/cropped_objects/0",
+    f"{destination_path}/0",
+    dirs_exist_ok=True,
+)
+shutil.copytree(
+    "/kaggle/input/efficientnet-data/efficient2/cropped_objects/1",
+    f"{destination_path}/1",
+    dirs_exist_ok=True,
+)
 
 # process_images_in_directory('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/0',f'{destination_path}/0')
 # process_images_in_directory('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/1',f'{destination_path}/1')
-#process_images_in_directory(f'{destination_path}/0',f'{dataset_path}/0')
-#process_images_in_directory(f'{destination_path}/1',f'{dataset_path}/1')
-image_count_0 = sum(1 for file_name in os.listdir(f"{destination_path}/0") if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')))
-image_count_1 = sum(1 for file_name in os.listdir(f"{destination_path}/1") if file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif')))
-shutil.copytree(destination_path, dataset_path,dirs_exist_ok=True)
+# process_images_in_directory(f'{destination_path}/0',f'{dataset_path}/0')
+# process_images_in_directory(f'{destination_path}/1',f'{dataset_path}/1')
+image_count_0 = sum(
+    1
+    for file_name in os.listdir(f"{destination_path}/0")
+    if file_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
+)
+image_count_1 = sum(
+    1
+    for file_name in os.listdir(f"{destination_path}/1")
+    if file_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
+)
+shutil.copytree(destination_path, dataset_path, dirs_exist_ok=True)
 
 print(f" images in the directory: {image_count_0},{image_count_1}")
 
@@ -230,6 +268,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torchvision
 
+
 # 显示一批图像
 def imshow(img, title=None):
     img = img / 2 + 0.5  # 反归一化
@@ -240,12 +279,16 @@ def imshow(img, title=None):
         plt.title(title)
     plt.show()
 
+
 # 从 train_loader 中获取一个批次的数据
 data_iter = iter(train_loader)
 images, labels = next(data_iter)  # 使用 next() 而不是 .next()
 
 # 显示图像
-imshow(torchvision.utils.make_grid(images[:8]), title=[f"Label: {label}" for label in labels[:8]])
+imshow(
+    torchvision.utils.make_grid(images[:8]),
+    title=[f"Label: {label}" for label in labels[:8]],
+)
 
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.3684Z","iopub.execute_input":"2025-10-28T14:28:03.368639Z","iopub.status.idle":"2025-10-28T14:28:03.37244Z","shell.execute_reply.started":"2025-10-28T14:28:03.368615Z","shell.execute_reply":"2025-10-28T14:28:03.371593Z"}}
@@ -274,8 +317,17 @@ model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
 # 将模型转移到 GPU 或 CPU
 model = model.to(device)
 
+
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.579191Z","iopub.execute_input":"2025-10-28T14:28:04.579858Z","iopub.status.idle":"2025-10-28T14:28:04.587481Z","shell.execute_reply.started":"2025-10-28T14:28:04.579825Z","shell.execute_reply":"2025-10-28T14:28:04.586543Z"}}
-def train_model(model, criterion, optimizer, train_loader, val_loader, epochs, save_path="/kaggle/working/model.pth"):
+def train_model(
+    model,
+    criterion,
+    optimizer,
+    train_loader,
+    val_loader,
+    epochs,
+    save_path="/kaggle/working/model.pth",
+):
     best_accuracy = 0.0  # 记录最佳精度
     for epoch in range(epochs):
         model.train()
@@ -288,7 +340,7 @@ def train_model(model, criterion, optimizer, train_loader, val_loader, epochs, s
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
-        
+
         val_loss = 0.0
         correct = 0
         total = 0
@@ -303,8 +355,10 @@ def train_model(model, criterion, optimizer, train_loader, val_loader, epochs, s
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
         accuracy = 100 * correct / total
-        print(f"Epoch [{epoch+1}/{epochs}], Train Loss: {running_loss/len(train_loader)}, Validation Loss: {val_loss/len(val_loader)}, Accuracy: {accuracy}%")
-        
+        print(
+            f"Epoch [{epoch+1}/{epochs}], Train Loss: {running_loss/len(train_loader)}, Validation Loss: {val_loss/len(val_loader)}, Accuracy: {accuracy}%"
+        )
+
         # 检查当前精度是否高于最佳精度，如果是，则保存模型
         if epoch > 5 and accuracy >= best_accuracy:
             best_accuracy = accuracy
@@ -317,22 +371,32 @@ from sklearn.model_selection import KFold
 import torch
 from torch.utils.data import Subset, DataLoader
 
-def train_k_fold(model, dataset, criterion, optimizer, epochs, k=5, batch_size=32, save_path="/kaggle/working/best_model.pth",stop_threshold=1e-6):
+
+def train_k_fold(
+    model,
+    dataset,
+    criterion,
+    optimizer,
+    epochs,
+    k=5,
+    batch_size=32,
+    save_path="/kaggle/working/best_model.pth",
+    stop_threshold=1e-6,
+):
     kfold = KFold(n_splits=k, shuffle=True, random_state=42)
     best_accuracy = 0.0  # 用于保存最佳模型的精度
-    best_val_loss = float('inf')  # 用于保存最小验证损失
+    best_val_loss = float("inf")  # 用于保存最小验证损失
 
     for fold, (train_indices, val_indices) in enumerate(kfold.split(dataset)):
         print(f"Fold {fold + 1}/{k}")
-        
+
         # 创建训练集和验证集
         train_subset = Subset(dataset, train_indices)
         val_subset = Subset(dataset, val_indices)
-        
+
         train_loader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
-        
-        
+
         for epoch in range(epochs):
             # 训练模式
             model.train()
@@ -345,7 +409,7 @@ def train_k_fold(model, dataset, criterion, optimizer, epochs, k=5, batch_size=3
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.item()
-            
+
             # 验证模式
             model.eval()
             val_loss = 0.0
@@ -360,10 +424,12 @@ def train_k_fold(model, dataset, criterion, optimizer, epochs, k=5, batch_size=3
                     _, predicted = outputs.max(1)
                     total += labels.size(0)
                     correct += predicted.eq(labels).sum().item()
-            
+
             accuracy = 100 * correct / total
             average_val_loss = val_loss / len(val_loader)  # 计算平均验证损失
-            print(f"Epoch [{epoch+1}/{epochs}] Fold [{fold+1}/{k}], Train Loss: {running_loss/len(train_loader):.6f}, Validation Loss: {average_val_loss:.6f}, Accuracy: {accuracy:.2f}%")
+            print(
+                f"Epoch [{epoch+1}/{epochs}] Fold [{fold+1}/{k}], Train Loss: {running_loss/len(train_loader):.6f}, Validation Loss: {average_val_loss:.6f}, Accuracy: {accuracy:.2f}%"
+            )
 
             # 保存最佳模型
             if accuracy >= best_accuracy:
@@ -371,14 +437,19 @@ def train_k_fold(model, dataset, criterion, optimizer, epochs, k=5, batch_size=3
                     best_val_loss = average_val_loss
                     best_accuracy = accuracy
                     torch.save(model.state_dict(), save_path)
-                    print(f"Best model saved with accuracy: {accuracy:.2f}%  Validation Loss: {average_val_loss:.6f}")
+                    print(
+                        f"Best model saved with accuracy: {accuracy:.2f}%  Validation Loss: {average_val_loss:.6f}"
+                    )
             # 提前停止条件
             if average_val_loss <= stop_threshold:
-                print(f"Stopping early: Validation loss {average_val_loss:.7f} reached threshold {stop_threshold}.")
+                print(
+                    f"Stopping early: Validation loss {average_val_loss:.7f} reached threshold {stop_threshold}."
+                )
                 return
-            
-    
-    print(f"K-Fold Training Completed. Best Accuracy: {best_accuracy:.2f}%  Best Validation Loss: {best_val_loss:.6f}")
+
+    print(
+        f"K-Fold Training Completed. Best Accuracy: {best_accuracy:.2f}%  Best Validation Loss: {best_val_loss:.6f}"
+    )
 
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.605911Z","iopub.execute_input":"2025-10-28T14:28:04.606233Z"}}
@@ -392,13 +463,13 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 # train_model(model, criterion, optimizer, train_loader, val_loader, epochs=50)
 train_k_fold(
     model=model,  # 模型类
-    dataset=dataset,          # 数据集
-    criterion=criterion,      # 损失函数
+    dataset=dataset,  # 数据集
+    criterion=criterion,  # 损失函数
     optimizer=optimizer,  # 优化器
-    epochs=50,                # 训练的 epoch 数量
-    k=2,                      # K 折交叉验证（默认 5）
-    batch_size=64,            # 批次大小
-    save_path="/kaggle/working/best_model.pth"  # 模型保存路径
+    epochs=50,  # 训练的 epoch 数量
+    k=2,  # K 折交叉验证（默认 5）
+    batch_size=64,  # 批次大小
+    save_path="/kaggle/working/best_model.pth",  # 模型保存路径
 )
 
 # %% [code]
@@ -463,55 +534,59 @@ def evaluate(
                     ax.axis("off")
                     shown_images += 1
                 plt.show()
-#                 wandb.log(
-#                     {
-#                         "Predictions": [
-#                             wandb.Image(fig, caption=f"Batch {shown_images // 8}")
-#                         ]
-#                     }
-#                 )
+    #                 wandb.log(
+    #                     {
+    #                         "Predictions": [
+    #                             wandb.Image(fig, caption=f"Batch {shown_images // 8}")
+    #                         ]
+    #                     }
+    #                 )
 
     cm = confusion_matrix(all_labels, all_preds)
     fig, ax = plt.subplots(figsize=(10, 10))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(cmap=plt.cm.Blues, ax=ax, values_format="d")
     plt.title("Confusion Matrix")
-        # 计算精度和召回率
+    # 计算精度和召回率
     precision, recall, _ = precision_recall_curve(all_labels, all_preds)
     average_precision = average_precision_score(all_labels, all_preds)
 
     # 绘制精度-召回率曲线
     plt.figure(figsize=(10, 5))
-    plt.plot(recall, precision, marker='.', label='Precision-Recall curve')
+    plt.plot(recall, precision, marker=".", label="Precision-Recall curve")
     plt.fill_between(recall, precision, alpha=0.1)
-    plt.title(f'Precision-Recall Curve (AP = {average_precision:.2f})')
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
+    plt.title(f"Precision-Recall Curve (AP = {average_precision:.2f})")
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
     plt.legend()
     plt.grid()
     plt.show()
-#     wandb.log({"Confusion Matrix": wandb.Image(fig)})
+    #     wandb.log({"Confusion Matrix": wandb.Image(fig)})
     print(f"Accuracy: {100 * correct / total}%")
 
 
-evaluate(model, val_loader, device,show_images=True)
+evaluate(model, val_loader, device, show_images=True)
 
 
 # %% [code]
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+transform = transforms.Compose(
+    [
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
 
 # 加载测试集
-test_dataset = ImageFolder(root='/kaggle/input/efficientnet-data/test', transform=transform)
+test_dataset = ImageFolder(
+    root="/kaggle/input/efficientnet-data/test", transform=transform
+)
 
 # 创建测试集 DataLoader
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # 使用相同的 evaluate 函数在测试集上评估
-evaluate(model, test_loader,device,show_images=True)
+evaluate(model, test_loader, device, show_images=True)
 # todo 把错误的图像整理出来
 
 # %% [code]
@@ -606,4 +681,4 @@ def evaluate(
 
 
 # 调用 evaluate 函数
-evaluate(model, test_loader,device,show_images=True)
+evaluate(model, test_loader, device, show_images=True)
