@@ -149,7 +149,7 @@ def set_seed(seed):
 
 
 # 调用函数固定种子
-set_seed(12)
+set_seed(42)
 
 import torch.nn as nn
 import torch.optim as optim
@@ -242,26 +242,45 @@ print("=" * 60)
 real_dataset = ImageFolder(root=real_data_path, transform=transform_val)
 NUM_CLASSES = len(real_dataset.classes)
 
-# 划分训练集和验证集（只使用真实数据）
-train_ratio = 0.8
-train_size = int(train_ratio * len(real_dataset))
-val_size = len(real_dataset) - train_size
+# 使用 sklearn 的 train_test_split 进行分层划分（Stratified Split）
+from sklearn.model_selection import train_test_split
 
-train_indices, val_indices = torch.utils.data.random_split(
-    range(len(real_dataset)), [train_size, val_size]
+train_ratio = 0.8
+
+# 获取所有样本的索引和标签
+indices = list(range(len(real_dataset)))
+labels = [label for _, label in real_dataset.samples]
+
+# 使用 stratify 参数确保训练集和验证集都包含所有类别
+train_indices, val_indices = train_test_split(
+    indices,
+    test_size=1 - train_ratio,
+    stratify=labels,  # 关键参数：按标签分层划分
+    random_state=42
 )
 
-print(f"真实数据划分: 训练集={train_size}, 验证集={val_size}")
+# 打印每个类别的划分情况
+from collections import Counter
+train_labels = [labels[i] for i in train_indices]
+val_labels = [labels[i] for i in val_indices]
+
+train_label_counts = Counter(train_labels)
+val_label_counts = Counter(val_labels)
+
+for label in sorted(set(labels)):
+    print(f"类别 {label}: 总数={labels.count(label)}, 训练={train_label_counts[label]}, 验证={val_label_counts[label]}")
+
+print(f"\n真实数据划分: 训练集={len(train_indices)}, 验证集={len(val_indices)}")
 
 # 将训练集的真实数据复制到 train_data_path
-for idx in train_indices.indices:
+for idx in train_indices:
     img_path, label = real_dataset.samples[idx]
     filename = os.path.basename(img_path)
     dest_path = f"{train_data_path}/{label}/{filename}"
     shutil.copy(img_path, dest_path)
 
 # 将验证集的真实数据复制到 val_data_path
-for idx in val_indices.indices:
+for idx in val_indices:
     img_path, label = real_dataset.samples[idx]
     filename = os.path.basename(img_path)
     dest_path = f"{val_data_path}/{label}/{filename}"
@@ -274,6 +293,12 @@ val_count_1 = len([f for f in os.listdir(f"{val_data_path}/1")])
 
 print(f"训练集真实数据: 类别0={train_real_count_0}, 类别1={train_real_count_1}")
 print(f"验证集数据: 类别0={val_count_0}, 类别1={val_count_1}")
+
+# 验证分层划分是否成功
+if val_count_0 > 0 and val_count_1 > 0:
+    print("✓ 验证集包含两个类别，分层划分成功！")
+else:
+    print("⚠️ 警告: 验证集缺少某个类别！")
 
 print("\n" + "=" * 60)
 print("步骤3: 向训练集添加GAN生成的数据（仅用于数据增强）")
@@ -688,7 +713,7 @@ def evaluate(
     
     # 打印详细的统计信息
     print(f"\n{'='*60}")
-    print(f"评估结果总结")
+    print("评估结果总结")
     print(f"{'='*60}")
     print(f"总样本数: {total}")
     print(f"正确预测: {correct}")
@@ -700,12 +725,12 @@ def evaluate(
     label_counts = Counter(all_labels)
     pred_counts = Counter(all_preds)
     
-    print(f"\n真实标签分布:")
+    print("\n真实标签分布:")
     for label in sorted(label_counts.keys()):
         label_name = class_names[label] if label < len(class_names) else str(label)
         print(f"  {label_name}: {label_counts[label]} ({100*label_counts[label]/total:.1f}%)")
     
-    print(f"\n预测标签分布:")
+    print("\n预测标签分布:")
     for label in sorted(pred_counts.keys()):
         label_name = class_names[label] if label < len(class_names) else str(label)
         print(f"  {label_name}: {pred_counts[label]} ({100*pred_counts[label]/total:.1f}%)")
