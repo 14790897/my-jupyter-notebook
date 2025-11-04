@@ -1,5 +1,6 @@
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.764355Z","iopub.execute_input":"2025-10-28T14:27:42.764569Z","iopub.status.idle":"2025-10-28T14:27:42.776652Z","shell.execute_reply.started":"2025-10-28T14:27:42.764544Z","shell.execute_reply":"2025-10-28T14:27:42.775942Z"}}
 import shutil
+
 from PIL import Image, ImageOps
 
 
@@ -46,7 +47,6 @@ def process_images_in_directory(source_dir, target_dir):
 
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.778281Z","iopub.execute_input":"2025-10-28T14:27:42.778552Z","iopub.status.idle":"2025-10-28T14:27:42.787551Z","shell.execute_reply.started":"2025-10-28T14:27:42.778526Z","shell.execute_reply":"2025-10-28T14:27:42.786731Z"}}
-import shutil
 import os
 from pathlib import Path
 
@@ -123,11 +123,13 @@ def copy_files_with_prefix(source_map, destination_dir, recursive=False):
     return total_files_copied
 
 
+import random
+
+import numpy as np
+
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.788589Z","iopub.execute_input":"2025-10-28T14:27:42.788924Z","iopub.status.idle":"2025-10-28T14:27:45.817803Z","shell.execute_reply.started":"2025-10-28T14:27:42.788886Z","shell.execute_reply":"2025-10-28T14:27:45.816809Z"}}
 # 固定随机种子
 import torch
-import random
-import numpy as np
 
 
 def set_seed(seed):
@@ -149,24 +151,17 @@ def set_seed(seed):
 # 调用函数固定种子
 set_seed(12)
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:45.819631Z","iopub.execute_input":"2025-10-28T14:27:45.820009Z","iopub.status.idle":"2025-10-28T14:28:02.778074Z","shell.execute_reply.started":"2025-10-28T14:27:45.81998Z","shell.execute_reply":"2025-10-28T14:28:02.777133Z"}}
-from torchvision.datasets import ImageFolder
-from torchvision import transforms
-from torch.utils.data import DataLoader, random_split
-import os
-import numpy as np
-import pandas as pd
-import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from sklearn.model_selection import train_test_split
+
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:45.819631Z","iopub.execute_input":"2025-10-28T14:27:45.820009Z","iopub.status.idle":"2025-10-28T14:28:02.778074Z","shell.execute_reply.started":"2025-10-28T14:27:45.81998Z","shell.execute_reply":"2025-10-28T14:28:02.777133Z"}}
+from torchvision.datasets import ImageFolder
 from tqdm.notebook import tqdm
 
 # 数据转换
-transform = transforms.Compose(
+transform_train = transforms.Compose(
     [
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
@@ -176,96 +171,148 @@ transform = transforms.Compose(
     ]
 )
 
+transform_val = transforms.Compose(
+    [
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+)
+
 source_path = "/kaggle/input/efficientnet-data/data"
 my_label_data = "/kaggle/input/efficientnet-data/my_label_data"
-destination_path = "./data"
-dataset_path = "./train/data"
 
-if not os.path.exists(destination_path):
-    os.makedirs(destination_path)
-    os.makedirs(dataset_path)
-# 原始数据(这个是手动生成的数据,效果好像不行)
-# shutil.copytree(source_path, destination_path, dirs_exist_ok=True)
-# 对一小部分数据进行旋转
-# process_images_in_directory(f'{my_label_data}/0',f'{destination_path}/0')
-# process_images_in_directory(f'{my_label_data}/1',f'{destination_path}/1')
-shutil.copytree(f"{my_label_data}/0", f"{destination_path}/0", dirs_exist_ok=True)
-shutil.copytree(f"{my_label_data}/1", f"{destination_path}/1", dirs_exist_ok=True)
+# ===== 关键修改：分离真实数据和生成数据 =====
+real_data_path = "./real_data"  # 只包含真实数据
+train_data_path = "./train_data"  # 训练数据（真实数据 + GAN生成数据）
+val_data_path = "./val_data"  # 验证数据（只有真实数据）
 
-# 生成的单个粒子数据
-destination_folder = Path(destination_path) / "0"
+# 创建目录
+for path in [real_data_path, train_data_path, val_data_path]:
+    os.makedirs(f"{path}/0", exist_ok=True)
+    os.makedirs(f"{path}/1", exist_ok=True)
 
-# 定义源文件夹和对应的前缀
-sources_to_copy = {
-    # 'gen1': Path('/kaggle/input/efficientnet-data/generated_images'),
-    # 'gen2': Path('/kaggle/input/efficientnet-data/generated_images_2'),
-    # 'gen3': Path('/kaggle/input/efficientnet-data/generated_images_3')
-    "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
-}
+print("=" * 60)
+print("步骤1: 收集所有真实数据（不包括GAN生成的图片）")
+print("=" * 60)
 
-# --- 2. 执行复制 ---
-
-# 默认使用非递归方式 (recursive=False),                                                 注释这里就是不使用生成数据
-copy_files_with_prefix(sources_to_copy, destination_folder)
+# 复制所有真实标注的数据到 real_data_path
+shutil.copytree(f"{my_label_data}/0", f"{real_data_path}/0", dirs_exist_ok=True)
+shutil.copytree(f"{my_label_data}/1", f"{real_data_path}/1", dirs_exist_ok=True)
 
 # 新标注的数据，分离状态的数据较多
 shutil.copytree(
     "/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/0",
-    f"{destination_path}/0",
+    f"{real_data_path}/0",
     dirs_exist_ok=True,
 )
 shutil.copytree(
     "/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/1",
-    f"{destination_path}/1",
+    f"{real_data_path}/1",
     dirs_exist_ok=True,
 )
 shutil.copytree(
     "/kaggle/input/efficientnet-data/efficient2/cropped_objects/0",
-    f"{destination_path}/0",
+    f"{real_data_path}/0",
     dirs_exist_ok=True,
 )
 shutil.copytree(
     "/kaggle/input/efficientnet-data/efficient2/cropped_objects/1",
-    f"{destination_path}/1",
+    f"{real_data_path}/1",
     dirs_exist_ok=True,
 )
 
-# process_images_in_directory('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/0',f'{destination_path}/0')
-# process_images_in_directory('/kaggle/input/efficientnet-data/efficient_net_data_me/cropped_objects/1',f'{destination_path}/1')
-# process_images_in_directory(f'{destination_path}/0',f'{dataset_path}/0')
-# process_images_in_directory(f'{destination_path}/1',f'{dataset_path}/1')
-image_count_0 = sum(
+real_count_0 = sum(
     1
-    for file_name in os.listdir(f"{destination_path}/0")
+    for file_name in os.listdir(f"{real_data_path}/0")
     if file_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
 )
-image_count_1 = sum(
+real_count_1 = sum(
     1
-    for file_name in os.listdir(f"{destination_path}/1")
+    for file_name in os.listdir(f"{real_data_path}/1")
     if file_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
 )
-shutil.copytree(destination_path, dataset_path, dirs_exist_ok=True)
+print(f"真实数据统计: 类别0={real_count_0}, 类别1={real_count_1}, 总计={real_count_0 + real_count_1}")
 
-print(f" images in the directory: {image_count_0},{image_count_1}")
+print("\n" + "=" * 60)
+print("步骤2: 划分真实数据为训练集和验证集 (80/20)")
+print("=" * 60)
 
-# torch.manual_seed(18)
+# 加载真实数据集
+real_dataset = ImageFolder(root=real_data_path, transform=transform_val)
+NUM_CLASSES = len(real_dataset.classes)
 
-dataset = ImageFolder(root=dataset_path, transform=transform)
-NUM_CLASSES = len(dataset.classes)
-
-# 设置训练集和验证集比例
+# 划分训练集和验证集（只使用真实数据）
 train_ratio = 0.8
-train_size = int(train_ratio * len(dataset))
-val_size = len(dataset) - train_size
+train_size = int(train_ratio * len(real_dataset))
+val_size = len(real_dataset) - train_size
 
-# 使用 random_split 自动划分
-train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+train_indices, val_indices = torch.utils.data.random_split(
+    range(len(real_dataset)), [train_size, val_size]
+)
+
+print(f"真实数据划分: 训练集={train_size}, 验证集={val_size}")
+
+# 将训练集的真实数据复制到 train_data_path
+for idx in train_indices.indices:
+    img_path, label = real_dataset.samples[idx]
+    filename = os.path.basename(img_path)
+    dest_path = f"{train_data_path}/{label}/{filename}"
+    shutil.copy(img_path, dest_path)
+
+# 将验证集的真实数据复制到 val_data_path
+for idx in val_indices.indices:
+    img_path, label = real_dataset.samples[idx]
+    filename = os.path.basename(img_path)
+    dest_path = f"{val_data_path}/{label}/{filename}"
+    shutil.copy(img_path, dest_path)
+
+train_real_count_0 = len([f for f in os.listdir(f"{train_data_path}/0")])
+train_real_count_1 = len([f for f in os.listdir(f"{train_data_path}/1")])
+val_count_0 = len([f for f in os.listdir(f"{val_data_path}/0")])
+val_count_1 = len([f for f in os.listdir(f"{val_data_path}/1")])
+
+print(f"训练集真实数据: 类别0={train_real_count_0}, 类别1={train_real_count_1}")
+print(f"验证集数据: 类别0={val_count_0}, 类别1={val_count_1}")
+
+print("\n" + "=" * 60)
+print("步骤3: 向训练集添加GAN生成的数据（仅用于数据增强）")
+print("=" * 60)
+
+# 定义GAN生成数据的源文件夹
+sources_to_copy = {
+    "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
+}
+
+# 将GAN生成的图片添加到训练集的类别0
+copy_files_with_prefix(sources_to_copy, f"{train_data_path}/0")
+
+train_total_count_0 = len([f for f in os.listdir(f"{train_data_path}/0")])
+train_total_count_1 = len([f for f in os.listdir(f"{train_data_path}/1")])
+gan_count = train_total_count_0 - train_real_count_0
+
+print(f"添加了 {gan_count} 张GAN生成的图片到训练集")
+print(f"训练集最终统计: 类别0={train_total_count_0} (真实={train_real_count_0}, GAN={gan_count}), 类别1={train_total_count_1}")
+
+print("\n" + "=" * 60)
+print("步骤4: 创建DataLoader")
+print("=" * 60)
+
+# 创建数据集（训练集使用数据增强，验证集不使用）
+train_dataset = ImageFolder(root=train_data_path, transform=transform_train)
+val_dataset = ImageFolder(root=val_data_path, transform=transform_val)
+
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
+print(f"训练集大小: {len(train_dataset)}")
+print(f"验证集大小: {len(val_dataset)} (100% 真实数据)")
+print("=" * 60)
+print("✓ 数据准备完成！验证集只包含真实数据，可以可靠地评估模型性能")
+print("=" * 60)
+
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:02.780093Z","iopub.execute_input":"2025-10-28T14:28:02.780522Z","iopub.status.idle":"2025-10-28T14:28:03.367308Z","shell.execute_reply.started":"2025-10-28T14:28:02.780492Z","shell.execute_reply":"2025-10-28T14:28:03.366309Z"}}
 import matplotlib.pyplot as plt
-import numpy as np
 import torchvision
 
 
@@ -299,11 +346,7 @@ imshow(
 # wandb.init(project='particle', tags=['efficient net nice'], name='efficient b1 net nice 32 batch size')
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.373549Z","iopub.execute_input":"2025-10-28T14:28:03.373902Z","iopub.status.idle":"2025-10-28T14:28:04.577886Z","shell.execute_reply.started":"2025-10-28T14:28:03.373875Z","shell.execute_reply":"2025-10-28T14:28:04.576905Z"}}
-from torchvision.models import efficientnet_b1, EfficientNet_B1_Weights
-import torch
-import torch.nn as nn
 from torchvision import models
-
 
 # 检查是否有多个 GPU
 device = "cuda:0" if torch.cuda.is_available() else "cpu"  # 使用第一个 GPU
@@ -366,10 +409,11 @@ def train_model(
             print(f"Model saved with accuracy: {accuracy}%")
 
 
+import torch
+
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.588955Z","iopub.execute_input":"2025-10-28T14:28:04.589403Z","iopub.status.idle":"2025-10-28T14:28:04.604872Z","shell.execute_reply.started":"2025-10-28T14:28:04.58933Z","shell.execute_reply":"2025-10-28T14:28:04.604015Z"}}
 from sklearn.model_selection import KFold
-import torch
-from torch.utils.data import Subset, DataLoader
+from torch.utils.data import DataLoader, Subset
 
 
 def train_k_fold(
@@ -454,23 +498,27 @@ def train_k_fold(
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.605911Z","iopub.execute_input":"2025-10-28T14:28:04.606233Z"}}
 # 定义损失函数和优化器
-import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-# 训练
-# train_model(model, criterion, optimizer, train_loader, val_loader, epochs=50)
-train_k_fold(
-    model=model,  # 模型类
-    dataset=dataset,  # 数据集
-    criterion=criterion,  # 损失函数
-    optimizer=optimizer,  # 优化器
-    epochs=50,  # 训练的 epoch 数量
-    k=2,  # K 折交叉验证（默认 5）
-    batch_size=64,  # 批次大小
-    save_path="/kaggle/working/best_model.pth",  # 模型保存路径
-)
+# 训练选项1: 使用简单的训练/验证划分（推荐，因为验证集已经正确分离）
+train_model(model, criterion, optimizer, train_loader, val_loader, epochs=50)
+
+# 训练选项2: 使用K折交叉验证（需要使用只包含真实数据的数据集）
+# 注意：K折交叉验证会在真实数据内部进行划分，不会用到GAN生成的数据
+# 如果要使用K折，需要在真实数据上进行：
+# real_dataset_for_kfold = ImageFolder(root=real_data_path, transform=transform_train)
+# train_k_fold(
+#     model=model,
+#     dataset=real_dataset_for_kfold,  # 使用真实数据集进行K折
+#     criterion=criterion,
+#     optimizer=optimizer,
+#     epochs=50,
+#     k=5,
+#     batch_size=64,
+#     save_path="/kaggle/working/best_model.pth",
+# )
 
 # %% [code]
 # 重新加载 EfficientNet 模型
@@ -483,13 +531,15 @@ model.load_state_dict(torch.load("best_model.pth", map_location=device))
 # 将模型转移到 GPU 或 CPU
 model = model.to(device)
 
-# %% [code]
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import average_precision_score
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch
-import numpy as np
+
+# %% [code]
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    average_precision_score,
+    confusion_matrix,
+    precision_recall_curve,
+)
 
 
 def evaluate(
