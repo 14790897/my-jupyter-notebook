@@ -493,8 +493,20 @@ import numpy as np
 
 
 def evaluate(
-    model, data_loader, device, class_names=["c", "s"], num_images=16, show_images=False
+    model, data_loader, device, class_names=["c", "s"], num_images=16, show_images=False, show_only_errors=False
 ):
+    """
+    评估模型性能并可视化结果
+    
+    参数:
+        model: 要评估的模型
+        data_loader: 数据加载器
+        device: 计算设备 (cuda/cpu)
+        class_names: 类别名称列表
+        num_images: 要显示的图像数量
+        show_images: 是否显示图像
+        show_only_errors: 如果为True，只显示预测错误的样本；如果为False，显示所有样本
+    """
     correct = 0
     total = 0
     all_preds = []
@@ -523,17 +535,36 @@ def evaluate(
             images = np.clip(images, 0, 1)  # 将值限制在0-1之间
 
             if show_images and shown_images < num_images:
-                fig, axes = plt.subplots(2, 4, figsize=(12, 6))
-                for i in range(8):
-                    ax = axes[i // 4, i % 4]
-                    ax.imshow(np.transpose(images[i], (1, 2, 0)))  # 调整维度顺序
-                    # 显示预测类别、真实类别和置信度
-                    ax.set_title(
-                        f"Pred: {predicted[i].item()} ({max_confidences[i].item():.2f}), True: {labels[i].item()}"
-                    )
-                    ax.axis("off")
-                    shown_images += 1
-                plt.show()
+                if show_only_errors:
+                    # 只显示预测错误的样本
+                    incorrect_indices = (predicted != labels).nonzero(as_tuple=True)[0]
+                    if len(incorrect_indices) > 0:
+                        num_to_show = min(8, len(incorrect_indices), num_images - shown_images)
+                        indices_to_show = incorrect_indices[:num_to_show]
+                    else:
+                        indices_to_show = []
+                else:
+                    # 显示所有样本
+                    num_to_show = min(8, len(images), num_images - shown_images)
+                    indices_to_show = list(range(num_to_show))
+                
+                if len(indices_to_show) > 0:
+                    fig, axes = plt.subplots(2, 4, figsize=(12, 6))
+                    for i, idx in enumerate(indices_to_show):
+                        ax = axes[i // 4, i % 4]
+                        ax.imshow(np.transpose(images[idx], (1, 2, 0)))  # 调整维度顺序
+                        # 显示预测类别、真实类别和置信度
+                        ax.set_title(
+                            f"Pred: {predicted[idx].item()} ({max_confidences[idx].item():.2f}), True: {labels[idx].item()}"
+                        )
+                        ax.axis("off")
+                        shown_images += 1
+                    # 隐藏未使用的子图
+                    for i in range(len(indices_to_show), 8):
+                        axes[i // 4, i % 4].axis('off')
+                    plt.show()
+                    if shown_images >= num_images:
+                        break
     #                 wandb.log(
     #                     {
     #                         "Predictions": [
@@ -587,98 +618,7 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # 使用相同的 evaluate 函数在测试集上评估
 evaluate(model, test_loader, device, show_images=True)
-# todo 把错误的图像整理出来
 
 # %% [code]
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import average_precision_score
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import torch
-import numpy as np
-
-
-def evaluate(
-    model, data_loader, device, class_names=["c", "s"], num_images=16, show_images=False
-):
-    correct = 0
-    total = 0
-    all_preds = []
-    all_labels = []
-    shown_images = 0  # 计数器，用于限制显示的图像数量
-    model.eval()
-
-    with torch.no_grad():
-        for images, labels in data_loader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
-
-            # 获取置信度
-            confidences = torch.softmax(outputs, dim=1)  # 计算每个类别的置信度
-            max_confidences, predicted = confidences.max(1)  # 获取每个图像的最高置信度
-
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
-            all_preds.extend(predicted.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-
-            # 转换图像回到原始的未归一化状态，用于显示
-            images = images.cpu().numpy()
-            images = images * np.array([0.229, 0.224, 0.225]).reshape((3, 1, 1))
-            images = images + np.array([0.485, 0.456, 0.406]).reshape((3, 1, 1))
-            images = np.clip(images, 0, 1)  # 将值限制在0-1之间
-
-            if show_images and shown_images < num_images:
-                # 找到预测错误的样本
-                incorrect_indices = (predicted != labels).nonzero(as_tuple=True)[0]
-
-                if len(incorrect_indices) > 0:
-                    fig, axes = plt.subplots(1, 2, figsize=(6, 6))
-                    for i, idx in enumerate(incorrect_indices[:8]):
-                        ax = axes[i % 4]
-                        ax.imshow(np.transpose(images[idx], (1, 2, 0)))  # 调整维度顺序
-                        # 显示预测类别、真实类别和置信度
-                        ax.set_title(
-                            f"Pred: {predicted[idx].item()} ({max_confidences[idx].item():.2f}), True: {labels[idx].item()}"
-                        )
-                        ax.axis("off")
-                        shown_images += 1
-
-                    plt.show()
-                    if shown_images >= num_images:
-                        break  # 如果已经显示了足够的图片，就退出循环
-
-    #                 wandb.log(
-    #                     {
-    #                         "Predictions": [
-    #                             wandb.Image(fig, caption=f"Batch {shown_images // 8}")
-    #                         ]
-    #                     }
-    #                 )
-
-    cm = confusion_matrix(all_labels, all_preds)
-    fig, ax = plt.subplots(figsize=(10, 10))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
-    disp.plot(cmap=plt.cm.Blues, ax=ax, values_format="d")
-    plt.title("Confusion Matrix")
-
-    # 计算精度和召回率
-    precision, recall, _ = precision_recall_curve(all_labels, all_preds)
-    average_precision = average_precision_score(all_labels, all_preds)
-
-    # 绘制精度-召回率曲线
-    plt.figure(figsize=(10, 5))
-    plt.plot(recall, precision, marker=".", label="Precision-Recall curve")
-    plt.fill_between(recall, precision, alpha=0.1)
-    plt.title(f"Precision-Recall Curve (AP = {average_precision:.2f})")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.legend()
-    plt.grid()
-    plt.show()
-    #     wandb.log({"Confusion Matrix": wandb.Image(fig)})
-    print(f"Accuracy: {100 * correct / total}%")
-
-
-# 调用 evaluate 函数
-evaluate(model, test_loader, device, show_images=True)
+# 只显示预测错误的样本
+evaluate(model, test_loader, device, show_images=True, show_only_errors=True)
