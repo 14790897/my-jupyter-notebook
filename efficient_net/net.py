@@ -149,7 +149,7 @@ def set_seed(seed):
 
 
 # 调用函数固定种子
-set_seed(42)
+set_seed(1)
 
 import torch.nn as nn
 import torch.optim as optim
@@ -165,6 +165,7 @@ transform_train = transforms.Compose(
     [
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip(),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -671,8 +672,6 @@ def evaluate(
                     for i in range(len(indices_to_show), 8):
                         axes[i // 4, i % 4].axis('off')
                     plt.show()
-                    if shown_images >= num_images:
-                        break
     #                 wandb.log(
     #                     {
     #                         "Predictions": [
