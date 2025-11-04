@@ -24,8 +24,8 @@ from torch_fidelity import calculate_metrics
 
 def calculate_baseline_fid(data_path, test_split=0.5, seed=42, verbose=True):
     """
-    计算数据集内部的FID（将数据集分成两半并计算它们之间的FID）
-    这可以作为FID评估的基线参考值
+    计算数据集内部的FID和KID（将数据集分成两半并计算它们之间的FID和KID）
+    这可以作为FID/KID评估的基线参考值
     
     参数:
         data_path (str): 数据集路径
@@ -34,11 +34,11 @@ def calculate_baseline_fid(data_path, test_split=0.5, seed=42, verbose=True):
         verbose (bool): 是否打印详细信息
     
     返回:
-        float: 数据集内部的FID分数，如果计算失败返回None
+        tuple: (baseline_fid, baseline_kid)，数据集内部的FID和KID分数，如果计算失败返回None
     """
     if verbose:
         print("\n" + "=" * 60)
-        print("📊 Calculating Baseline FID (Dataset Internal)")
+        print("📊 Calculating Baseline FID and KID (Dataset Internal)")
         print("=" * 60)
     
     # 检查路径是否存在
@@ -123,27 +123,39 @@ def calculate_baseline_fid(data_path, test_split=0.5, seed=42, verbose=True):
             shutil.copy2(img_path, dest)
         
         if verbose:
-            print("🔢 Calculating FID between two subsets...")
+            print("🔢 Calculating FID and KID between two subsets...")
             print("   (This may take a few minutes...)")
         
-        # 计算FID
+        # 动态设置 KID 子集大小（不能超过最小子集的样本数）
+        min_subset_size = min(len(subset1_images), len(subset2_images))
+        kid_subset_size = min(1000, min_subset_size)  # 使用较小的值
+        
+        if verbose and kid_subset_size < 1000:
+            print(f"   ⚠️  Small dataset detected: using KID subset size = {kid_subset_size}")
+        
+        # 计算 FID 和 KID
         metrics = calculate_metrics(
             input1=str(subset1_dir),
             input2=str(subset2_dir),
             cuda=True,  # 如果有GPU则使用
             fid=True,
+            kid=True,
+            kid_subset_size=kid_subset_size,  # 根据数据集大小动态调整
             verbose=False
         )
         
         baseline_fid = metrics['frechet_inception_distance']
+        baseline_kid = metrics['kernel_inception_distance_mean']
+        baseline_kid_std = metrics['kernel_inception_distance_std']
         
         if verbose:
             print("\n" + "=" * 60)
             print(f"✅ Baseline FID (Dataset Internal): {baseline_fid:.4f}")
+            print(f"✅ Baseline KID (Dataset Internal): {baseline_kid:.4f} ± {baseline_kid_std:.4f}")
             print("=" * 60)
             print("\n📊 Interpretation:")
-            print("   • This represents the 'best possible' FID for this dataset")
-            print("   • Your generator should aim to achieve FID close to or below this value")
+            print("   • This represents the 'best possible' FID/KID for this dataset")
+            print("   • Your generator should aim to achieve metrics close to or below these values")
             
             # 提供解释
             if baseline_fid < 20:
@@ -153,13 +165,23 @@ def calculate_baseline_fid(data_path, test_split=0.5, seed=42, verbose=True):
             else:
                 print("   • 🔴 High baseline FID: Dataset has high diversity or quality variance")
             
+            if baseline_kid < 0.01:
+                print("   • 🟢 Low baseline KID: Dataset is very consistent")
+            elif baseline_kid < 0.05:
+                print("   • 🟡 Medium baseline KID: Dataset has moderate diversity")
+            else:
+                print("   • 🔴 High baseline KID: Dataset has high diversity or quality variance")
+            
             print("\n💡 Guidelines:")
             print(f"   • Generator FID < {baseline_fid:.2f}: 🎉 Excellent!")
             print(f"   • Generator FID < {baseline_fid * 1.5:.2f}: ✓ Good")
             print(f"   • Generator FID < {baseline_fid * 2:.2f}: ⚠️  Needs improvement")
+            print(f"   • Generator KID < {baseline_kid:.4f}: 🎉 Excellent!")
+            print(f"   • Generator KID < {baseline_kid * 1.5:.4f}: ✓ Good")
+            print(f"   • Generator KID < {baseline_kid * 2:.4f}: ⚠️  Needs improvement")
             print("=" * 60 + "\n")
         
-        return baseline_fid
+        return baseline_fid, baseline_kid
         
     except Exception as e:
         print(f"❌ Error calculating baseline FID: {e}")
@@ -233,8 +255,8 @@ Examples:
     
     args = parser.parse_args()
     
-    # 计算基线FID
-    baseline_fid = calculate_baseline_fid(
+    # 计算基线 FID 和 KID
+    result = calculate_baseline_fid(
         data_path=args.data_path,
         test_split=args.split,
         seed=args.seed,
@@ -242,12 +264,14 @@ Examples:
     )
     
     # 处理结果
-    if baseline_fid is None:
+    if result is None:
         sys.exit(1)
+    
+    baseline_fid, baseline_kid = result
     
     # 如果是quiet模式，只输出数值
     if args.quiet:
-        print(f"{baseline_fid:.4f}")
+        print(f"FID: {baseline_fid:.4f}, KID: {baseline_kid:.4f}")
     
     # 保存到文件
     if args.output:
@@ -256,12 +280,13 @@ Examples:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
             with open(output_path, 'w') as f:
-                f.write("Baseline FID Calculation Results\n")
+                f.write("Baseline FID and KID Calculation Results\n")
                 f.write("=" * 60 + "\n\n")
                 f.write(f"Dataset Path: {args.data_path}\n")
                 f.write(f"Split Ratio: {args.split}\n")
                 f.write(f"Random Seed: {args.seed}\n")
-                f.write(f"\nBaseline FID: {baseline_fid:.4f}\n\n")
+                f.write(f"\nBaseline FID: {baseline_fid:.4f}\n")
+                f.write(f"Baseline KID: {baseline_kid:.4f}\n\n")
                 f.write("=" * 60 + "\n")
             
             if not args.quiet:
