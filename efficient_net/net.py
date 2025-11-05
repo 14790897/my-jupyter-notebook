@@ -3,6 +3,9 @@ import shutil
 
 from PIL import Image, ImageOps
 
+fixed_seed = 42
+# ===== 配置选项：是否使用GAN生成的数据 =====
+USE_GAN_DATA = True  # 设置为 False 则只使用真实数据，True 则添加GAN数据
 
 def process_images_in_directory(source_dir, target_dir):
     os.makedirs(target_dir, exist_ok=True)
@@ -146,7 +149,6 @@ def set_seed(seed):
     # 保证一些操作的确定性
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-fixed_seed = 42
 
 # 调用函数固定种子
 set_seed(fixed_seed)
@@ -302,24 +304,35 @@ if val_count_0 > 0 and val_count_1 > 0:
 else:
     print("⚠️ 警告: 验证集缺少某个类别！")
 
+
+
 print("\n" + "=" * 60)
-print("步骤3: 向训练集添加GAN生成的数据（仅用于数据增强）")
+if USE_GAN_DATA:
+    print("步骤3: 向训练集添加GAN生成的数据（仅用于数据增强）")
+else:
+    print("步骤3: 跳过GAN数据，仅使用真实数据")
 print("=" * 60)
 
-# 定义GAN生成数据的源文件夹
-sources_to_copy = {
-    "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
-}
+if USE_GAN_DATA:
+    # 定义GAN生成数据的源文件夹
+    sources_to_copy = {
+        "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
+    }
 
-# 将GAN生成的图片添加到训练集的类别0
-copy_files_with_prefix(sources_to_copy, f"{train_data_path}/0")
+    # 将GAN生成的图片添加到训练集的类别0
+    copy_files_with_prefix(sources_to_copy, f"{train_data_path}/0")
+else:
+    print("已跳过添加GAN数据")
 
 train_total_count_0 = len([f for f in os.listdir(f"{train_data_path}/0")])
 train_total_count_1 = len([f for f in os.listdir(f"{train_data_path}/1")])
-gan_count = train_total_count_0 - train_real_count_0
 
-print(f"添加了 {gan_count} 张GAN生成的图片到训练集")
-print(f"训练集最终统计: 类别0={train_total_count_0} (真实={train_real_count_0}, GAN={gan_count}), 类别1={train_total_count_1}")
+if USE_GAN_DATA:
+    gan_count = train_total_count_0 - train_real_count_0
+    print(f"添加了 {gan_count} 张GAN生成的图片到训练集")
+    print(f"训练集最终统计: 类别0={train_total_count_0} (真实={train_real_count_0}, GAN={gan_count}), 类别1={train_total_count_1}")
+else:
+    print(f"训练集统计: 类别0={train_total_count_0}, 类别1={train_total_count_1} (100% 真实数据)")
 
 print("\n" + "=" * 60)
 print("步骤4: 创建DataLoader")
