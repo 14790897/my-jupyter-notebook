@@ -767,7 +767,7 @@ test_dataset = ImageFolder(
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # 使用相同的 evaluate 函数在测试集上评估
-evaluate(model, test_loader, device, show_images=True)
+# evaluate(model, test_loader, device, show_images=True)
 
 # %% [code]
 # 只显示预测错误的样本
