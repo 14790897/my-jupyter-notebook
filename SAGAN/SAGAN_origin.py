@@ -1098,16 +1098,20 @@ print("=" * 50 + "\n")
 display_multiple_img(getImagePaths(generated_images_dir))
 
 # %% [markdown] {"jupyter":{"outputs_hidden":false}}
-# ## Summary
-# 
-# This script implements a standard DCGAN with the following key components:
-# 
-# 1. **Generator**: Uses transposed convolutions to upsample from a latent vector (100-dim) to a 64x64 image
-# 2. **Discriminator**: Uses strided convolutions to downsample a 64x64 image to a single probability score
-# 3. **Training**: Uses Binary Cross-Entropy loss for both networks
-# 4. **Architecture Guidelines** (following DCGAN paper):
-#    - Replace pooling layers with strided convolutions
-#    - Use batch normalization in both networks
-#    - Remove fully connected hidden layers
-#    - Use ReLU activation in generator (except output layer which uses Tanh)
-#    - Use LeakyReLU activation in discriminator
+
+## 总结 (Summary)
+
+# 此脚本实现了一个先进的 **SAGAN (Self-Attention Generative Adversarial Network)**，它在 DCGAN 架构的基础上进行了关键改进。
+
+# 1.  **生成器 (Generator)**: 使用转置卷积 (DCGAN 骨干) 将一个 **128 维**的潜向量上采样为 64x64 的图像。
+# 2.  **判别器 (Discriminator)**: 使用步进卷积 (DCGAN 骨干) 将 64x64 的图像下采样为单个 logit 值。
+# 3.  **核心改进 (SAGAN)**:
+#     * **自注意力 (Self-Attention)**: 在生成器和判别器的 16x16 分辨率层都插入了 `SelfAttention` 模块，使其能够捕捉图像中的远程依赖关系。
+#     * **光谱归一化 (Spectral Normalization)**: 判别器的**所有**卷积层都应用了 `nn.utils.spectral_norm`，这是稳定 SAGAN 训练的关键技术。
+# 4.  **训练 (Training)**:
+#     * **损失函数**: 使用 **Hinge Loss**（而不是 BCELoss）来训练两个网络，这被证明在 SAGAN 中更有效。
+#     * **优化器**: 使用 Adam 优化器，并设置 `betas=(0.0, 0.9)` 以提高稳定性。
+# 5.  **评估 (Evaluation)**:
+#     * 使用 `torch-fidelity` 库严格计算 **KID** 和 **FID** 分数。
+#     * 通过比较真实数据集的两个子集，计算了 **Baseline KID** 作为基准。
+#     * 模型保存策略基于**最佳 KID 分数**，这是一个比损失更可靠的图像质量指标。
