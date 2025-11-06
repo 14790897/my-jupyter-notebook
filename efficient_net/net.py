@@ -7,46 +7,46 @@ fixed_seed = 42
 # ===== 配置选项：是否使用GAN生成的数据 =====
 USE_GAN_DATA = True  # 设置为 False 则只使用真实数据，True 则添加GAN数据
 
-def process_images_in_directory(source_dir, target_dir):
-    os.makedirs(target_dir, exist_ok=True)
-    # 遍历源目录中的文件
-    for file_name in os.listdir(source_dir):
-        file_path = os.path.join(source_dir, file_name)
+# def process_images_in_directory(source_dir, target_dir):
+#     os.makedirs(target_dir, exist_ok=True)
+#     # 遍历源目录中的文件
+#     for file_name in os.listdir(source_dir):
+#         file_path = os.path.join(source_dir, file_name)
 
-        # 检查文件是否是图片
-        if file_name.lower().endswith(
-            (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif")
-        ):
-            # 打开图片
-            img = Image.open(file_path)
+#         # 检查文件是否是图片
+#         if file_name.lower().endswith(
+#             (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif")
+#         ):
+#             # 打开图片
+#             img = Image.open(file_path)
 
-            # 保存原始图片到目标目录
-            # original_save_path = os.path.join(target_dir, f'original_{file_name}')
-            # img.save(original_save_path)
+#             # 保存原始图片到目标目录
+#             # original_save_path = os.path.join(target_dir, f'original_{file_name}')
+#             # img.save(original_save_path)
 
-            # 上下翻转
-            flipped_up_down = ImageOps.flip(img)
-            flipped_up_down_save_path = os.path.join(
-                target_dir, f"flipped_ud_{file_name}"
-            )
-            flipped_up_down.save(flipped_up_down_save_path)
+#             # 上下翻转
+#             flipped_up_down = ImageOps.flip(img)
+#             flipped_up_down_save_path = os.path.join(
+#                 target_dir, f"flipped_ud_{file_name}"
+#             )
+#             flipped_up_down.save(flipped_up_down_save_path)
 
-            # 左右翻转
-            flipped_left_right = ImageOps.mirror(img)
-            flipped_left_right_save_path = os.path.join(
-                target_dir, f"flipped_lr_{file_name}"
-            )
-            flipped_left_right.save(flipped_left_right_save_path)
+#             # 左右翻转
+#             flipped_left_right = ImageOps.mirror(img)
+#             flipped_left_right_save_path = os.path.join(
+#                 target_dir, f"flipped_lr_{file_name}"
+#             )
+#             flipped_left_right.save(flipped_left_right_save_path)
 
-            # 90度旋转
-            rotated_90 = img.rotate(90)  # 逆时针旋转90度
-            rotated_90_save_path = os.path.join(target_dir, f"rotated_90_{file_name}")
-            rotated_90.save(rotated_90_save_path)
+#             # 90度旋转
+#             rotated_90 = img.rotate(90)  # 逆时针旋转90度
+#             rotated_90_save_path = os.path.join(target_dir, f"rotated_90_{file_name}")
+#             rotated_90.save(rotated_90_save_path)
 
-            # 270度旋转
-            rotated_270 = img.rotate(270)  # 逆时针旋转270度
-            rotated_270_save_path = os.path.join(target_dir, f"rotated_270_{file_name}")
-            rotated_270.save(rotated_270_save_path)
+#             # 270度旋转
+#             rotated_270 = img.rotate(270)  # 逆时针旋转270度
+#             rotated_270_save_path = os.path.join(target_dir, f"rotated_270_{file_name}")
+#             rotated_270.save(rotated_270_save_path)
 
 
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.778281Z","iopub.execute_input":"2025-10-28T14:27:42.778552Z","iopub.status.idle":"2025-10-28T14:27:42.787551Z","shell.execute_reply.started":"2025-10-28T14:27:42.778526Z","shell.execute_reply":"2025-10-28T14:27:42.786731Z"}}
@@ -316,7 +316,7 @@ print("=" * 60)
 if USE_GAN_DATA:
     # 定义GAN生成数据的源文件夹
     sources_to_copy = {
-        "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251104_015533")
+        "gen1": Path("/kaggle/input/efficientnet-data/generated_images_20251106_075700")
     }
 
     # 将GAN生成的图片添加到训练集的类别0
