@@ -1,0 +1,233 @@
+<mxfile host="app.diagrams.net" modified="2026-01-23T00:00:00.000Z" agent="GPT-5.2" version="24.7.10" type="device">
+  <diagram id="SAGAN_MODULAR" name="SAGAN - Paper Modular">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Header -->
+        <mxCell id="H0" value="SAGAN Architecture (Paper-style Modular) — Grayscale 64×64, latent_dim=128, ngf=64, ndf=64" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="1520" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="H1" value="Notation: output shapes are [B,C,H,W].  SN = SpectralNorm.  Tags show activations/normalization." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=12;fontColor=#444444;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="1520" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Swimlanes -->
+        <mxCell id="LANE_G" value="Generator  G(z)" style="swimlane;horizontal=0;startSize=34;rounded=1;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontStyle=1;fillColor=#FAFAFA;strokeColor=#C9C9C9;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="740" height="760" as="geometry"/>
+        </mxCell>
+        <mxCell id="LANE_D" value="Discriminator  D(x)" style="swimlane;horizontal=0;startSize=34;rounded=1;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontStyle=1;fillColor=#FAFAFA;strokeColor=#C9C9C9;" vertex="1" parent="1">
+          <mxGeometry x="820" y="90" width="740" height="760" as="geometry"/>
+        </mxCell>
+
+        <!-- Helper: tag style (small) -->
+        <!-- We'll just set per-cell styles for compatibility -->
+
+        <!-- ============ Generator (modules + tags) ============ -->
+        <mxCell id="G_IN" value="z ~ N(0,1)&#10;[B,128,1,1]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#888888;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="60" width="100" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G1" value="ConvT 4×4  s1  p0&#10;128→512   out [B,512,4,4]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="135" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="G1_TAG1" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="142" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="G1_TAG2" value="ReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="168" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G2" value="ConvT 4×4  s2  p1&#10;512→256   out [B,256,8,8]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="215" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="G2_TAG1" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="222" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="G2_TAG2" value="ReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="248" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G3" value="ConvT 4×4  s2  p1&#10;256→128   out [B,128,16,16]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="295" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="G3_TAG1" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="302" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="G3_TAG2" value="ReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="328" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G_SA" value="Self-Attention @16×16&#10;out [B,128,16,16]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#C9A227;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="375" width="100" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="G_SA_TAG" value="γ·Attn + x" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#C9A227;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="386" width="75" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G4" value="ConvT 4×4  s2  p1&#10;128→64   out [B,64,32,32]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="450" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="G4_TAG1" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="457" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="G4_TAG2" value="ReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="483" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G_OUT" value="ConvT 4×4  s2  p1&#10;64→1   out [B,1,64,64]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="530" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="G_OUT_TAG" value="Tanh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_G">
+          <mxGeometry x="635" y="544" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="G_NOTE" value="(Optional detail for caption)&#10;Self-Attention uses 1×1 conv for Q,K,V; attention map over (16×16) tokens; residual with learnable γ." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#BBBBBB;fontFamily=Helvetica;fontSize=11;fontColor=#444444;" vertex="1" parent="LANE_G">
+          <mxGeometry x="60" y="620" width="650" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ Discriminator (modules + tags) ============ -->
+        <mxCell id="D_IN" value="x (real) or x̂ (fake)&#10;[B,1,64,64]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#888888;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="60" width="100" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D1" value="Conv 4×4  s2  p1&#10;1→64   out [B,64,32,32]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="135" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="D1_TAG1" value="SN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="142" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D1_TAG2" value="LReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="168" width="55" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D2" value="Conv 4×4  s2  p1&#10;64→128   out [B,128,16,16]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="215" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="D2_TAG1" value="SN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="222" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D2_TAG2" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="248" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D2_TAG3" value="LReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="695" y="248" width="65" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D_SA" value="Self-Attention @16×16&#10;out [B,128,16,16]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#C9A227;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="295" width="100" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="D_SA_TAG" value="γ·Attn + x" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#C9A227;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="306" width="75" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D3" value="Conv 4×4  s2  p1&#10;128→256   out [B,256,8,8]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="370" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="D3_TAG1" value="SN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="377" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D3_TAG2" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="403" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D3_TAG3" value="LReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="695" y="403" width="65" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D4" value="Conv 4×4  s2  p1&#10;256→512   out [B,512,4,4]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="450" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="D4_TAG1" value="SN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="457" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D4_TAG2" value="BN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="483" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D4_TAG3" value="LReLU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="695" y="483" width="65" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D5" value="Conv 4×4  s1  p0&#10;512→1   out [B,1,1,1]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="530" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="D5_TAG1" value="SN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="537" width="55" height="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="D5_TAG2" value="No Sigmoid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3F3F3;strokeColor=#999999;fontFamily=Helvetica;fontSize=10;align=center;verticalAlign=middle;" vertex="1" parent="LANE_D">
+          <mxGeometry x="635" y="563" width="85" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="D_OUT" value="squeeze → logits&#10;D(x) ∈ R^[B]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#888888;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="610" width="100" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="LOSS" value="Hinge Loss (code-consistent)&#10;L_D = E[ReLU(1−D(x))] + E[ReLU(1+D(G(z)))]&#10;L_G = −E[D(G(z))]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#BBBBBB;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="LANE_D">
+          <mxGeometry x="60" y="690" width="650" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- ============ Edges ============ -->
+        <!-- Generator flow -->
+        <mxCell id="eG01" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G_IN" target="G1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eG12" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G1" target="G2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eG23" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G2" target="G3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eG3SA" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G3" target="G_SA">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eGSA4" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G_SA" target="G4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eG4OUT" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="G4" target="G_OUT">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Discriminator flow -->
+        <mxCell id="eD01" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D_IN" target="D1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eD12" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D1" target="D2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eD2SA" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D2" target="D_SA">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eDSA3" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D_SA" target="D3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eD34" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D3" target="D4">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eD45" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D4" target="D5">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="eD5OUT" style="endArrow=block;html=1;strokeWidth=1.5;strokeColor=#333333;" edge="1" parent="1" source="D5" target="D_OUT">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Fake flow to D input (dashed across lanes) -->
+        <mxCell id="eFake" value="x̂ = G(z)" style="endArrow=block;html=1;dashed=1;dashPattern=8 4;strokeWidth=1.5;strokeColor=#333333;fontFamily=Helvetica;fontSize=11;" edge="1" parent="1" source="G_OUT" target="D_IN">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="800" y="360" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Logits to loss (dashed) -->
+        <mxCell id="eLoss" style="endArrow=block;html=1;dashed=1;dashPattern=8 4;strokeWidth=1.2;strokeColor=#666666;" edge="1" parent="1" source="D_OUT" target="LOSS">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Footer legend -->
+        <mxCell id="LEG" value="Modular caption suggestion: “Generator uses DCGAN-style deconvolution blocks with BN+ReLU, plus a Self-Attention module at 16×16; Discriminator uses SN-Conv blocks with BN+LReLU and Self-Attention at 16×16; Hinge loss is used without sigmoid.”" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C9C9C9;fontFamily=Helvetica;fontSize=11;fontColor=#444444;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="1520" height="60" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -109,3 +109,9 @@ python -m torch_fidelity.fidelity --kid --gpu 0 --kid-subset-size 100 --input1 "
 <!-- Kernel Inception Distance: 0.39059902521306833 ± 0.004857279021666483                                                                                                        
 kernel_inception_distance_mean: 0.390599
 kernel_inception_distance_std: 0.004857279 -->
+
+
+
+## SAGAN_now.py可以绘制attention map
+
+![alt text](image.png)
