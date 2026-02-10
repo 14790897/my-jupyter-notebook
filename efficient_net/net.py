@@ -752,6 +752,11 @@ def evaluate(
     recall_weighted = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
     f1_weighted = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
 
+    # 计算每个类别的精确率、召回率、F1分数
+    precision_per_class = np.array(precision_score(all_labels, all_preds, average=None, zero_division=0))
+    recall_per_class = np.array(recall_score(all_labels, all_preds, average=None, zero_division=0))
+    f1_per_class = np.array(f1_score(all_labels, all_preds, average=None, zero_division=0))
+
     # 打印详细的统计信息
     print(f"\n{'='*60}")
     print("评估结果总结")
@@ -761,16 +766,27 @@ def evaluate(
     print(f"错误预测: {total - correct}")
     print(f"准确率 (Accuracy): {100 * correct / total:.2f}%")
 
+    # 每个类别的性能指标
+    print(f"\n{'='*60}")
+    print("每个类别的性能指标")
+    print(f"{'='*60}")
+    for i in range(len(precision_per_class)):
+        class_name = class_names[i] if i < len(class_names) else str(i)
+        print(f"\n类别 {i} ({class_name}):")
+        print(f"  精确率 (Precision): {precision_per_class[i]:.4f} ({precision_per_class[i] * 100:.2f}%)")
+        print(f"  召回率 (Recall):    {recall_per_class[i]:.4f} ({recall_per_class[i] * 100:.2f}%)")
+        print(f"  F1分数 (F1-Score):  {f1_per_class[i]:.4f} ({f1_per_class[i] * 100:.2f}%)")
+
     # 性能指标统计
     print(f"\n{'='*60}")
-    print("性能指标 (Macro Average)")
+    print("性能指标 (Macro Average - 宏平均)")
     print(f"{'='*60}")
     print(f"精确率 (Precision): {precision_macro:.4f} ({precision_macro * 100:.2f}%)")
     print(f"召回率 (Recall): {recall_macro:.4f} ({recall_macro * 100:.2f}%)")
     print(f"F1分数 (F1-Score): {f1_macro:.4f} ({f1_macro * 100:.2f}%)")
 
     print(f"\n{'='*60}")
-    print("性能指标 (Weighted Average)")
+    print("性能指标 (Weighted Average - 加权平均)")
     print(f"{'='*60}")
     print(f"精确率 (Precision): {precision_weighted:.4f} ({precision_weighted * 100:.2f}%)")
     print(f"召回率 (Recall): {recall_weighted:.4f} ({recall_weighted * 100:.2f}%)")
