@@ -622,11 +622,15 @@ def evaluate(
     with torch.no_grad():
         for images, labels in data_loader:
             batch_count += 1
+            # 先将数据传输到设备（不计入推理时间）
+            images, labels = images.to(device), labels.to(device)
+
             # 记录推理开始时间
             if device.startswith('cuda'):
                 torch.cuda.synchronize()  # 确保GPU操作完成
             batch_start_time = time.time()
-            images, labels = images.to(device), labels.to(device)
+
+            # 模型推理
             outputs = model(images)
 
             # 记录推理结束时间
