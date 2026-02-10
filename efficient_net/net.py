@@ -1,5 +1,6 @@
 # %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.764355Z","iopub.execute_input":"2025-10-28T14:27:42.764569Z","iopub.status.idle":"2025-10-28T14:27:42.776652Z","shell.execute_reply.started":"2025-10-28T14:27:42.764544Z","shell.execute_reply":"2025-10-28T14:27:42.775942Z"},"jupyter":{"outputs_hidden":false}}
 import shutil
+import time
 
 from PIL import Image, ImageOps
 
@@ -573,6 +574,10 @@ from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
     precision_recall_curve,
+    precision_score,
+    recall_score,
+    f1_score,
+    classification_report,
 )
 
 
@@ -605,13 +610,34 @@ def evaluate(
     total = 0
     all_preds = []
     all_labels = []
+    all_probs = []  # 保存正类的概率分数，用于绘制PR曲线
     shown_images = 0  # 计数器，用于限制显示的图像数量
     model.eval()
 
+    # 推理时间统计
+    inference_times = []
+    total_inference_time = 0.0
+    batch_count = 0
+
     with torch.no_grad():
         for images, labels in data_loader:
+            batch_count += 1
+            # 记录推理开始时间
+            if device.startswith('cuda'):
+                torch.cuda.synchronize()  # 确保GPU操作完成
+            batch_start_time = time.time()
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
+
+            # 记录推理结束时间
+            if device.startswith('cuda'):
+                torch.cuda.synchronize()  # 确保GPU操作完成
+            batch_end_time = time.time()
+
+            # 计算本批次推理时间
+            batch_inference_time = batch_end_time - batch_start_time
+            inference_times.append(batch_inference_time)
+            total_inference_time += batch_inference_time
 
             # 获取置信度
             confidences = torch.softmax(outputs, dim=1)  # 计算每个类别的置信度
@@ -621,6 +647,8 @@ def evaluate(
             correct += predicted.eq(labels).sum().item()
             all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            # 保存正类（类别1）的概率分数，用于PR曲线
+            all_probs.extend(confidences[:, 1].cpu().numpy())
 
             # 转换图像回到原始的未归一化状态，用于显示
             images = images.cpu().numpy()
@@ -695,9 +723,9 @@ def evaluate(
         print(f"Accuracy: {100 * correct / total}%")
         return
 
-    # 计算精度和召回率
-    precision, recall, _ = precision_recall_curve(all_labels, all_preds)
-    average_precision = average_precision_score(all_labels, all_preds)
+    # 计算精度和召回率（使用概率分数而不是预测标签）
+    precision, recall, _ = precision_recall_curve(all_labels, all_probs)
+    average_precision = average_precision_score(all_labels, all_probs)
 
     # 绘制精度-召回率曲线
     plt.figure(figsize=(10, 5))
@@ -711,6 +739,15 @@ def evaluate(
     plt.show()
     #     wandb.log({"Confusion Matrix": wandb.Image(fig)})
 
+    # 计算精确率、召回率、F1分数
+    precision_macro = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+    recall_macro = recall_score(all_labels, all_preds, average='macro', zero_division=0)
+    f1_macro = f1_score(all_labels, all_preds, average='macro', zero_division=0)
+
+    precision_weighted = precision_score(all_labels, all_preds, average='weighted', zero_division=0)
+    recall_weighted = recall_score(all_labels, all_preds, average='weighted', zero_division=0)
+    f1_weighted = f1_score(all_labels, all_preds, average='weighted', zero_division=0)
+
     # 打印详细的统计信息
     print(f"\n{'='*60}")
     print("评估结果总结")
@@ -718,7 +755,34 @@ def evaluate(
     print(f"总样本数: {total}")
     print(f"正确预测: {correct}")
     print(f"错误预测: {total - correct}")
-    print(f"准确率: {100 * correct / total:.2f}%")
+    print(f"准确率 (Accuracy): {100 * correct / total:.2f}%")
+
+    # 性能指标统计
+    print(f"\n{'='*60}")
+    print("性能指标 (Macro Average)")
+    print(f"{'='*60}")
+    print(f"精确率 (Precision): {precision_macro:.4f} ({precision_macro * 100:.2f}%)")
+    print(f"召回率 (Recall): {recall_macro:.4f} ({recall_macro * 100:.2f}%)")
+    print(f"F1分数 (F1-Score): {f1_macro:.4f} ({f1_macro * 100:.2f}%)")
+
+    print(f"\n{'='*60}")
+    print("性能指标 (Weighted Average)")
+    print(f"{'='*60}")
+    print(f"精确率 (Precision): {precision_weighted:.4f} ({precision_weighted * 100:.2f}%)")
+    print(f"召回率 (Recall): {recall_weighted:.4f} ({recall_weighted * 100:.2f}%)")
+    print(f"F1分数 (F1-Score): {f1_weighted:.4f} ({f1_weighted * 100:.2f}%)")
+
+    # 推理时间统计
+    print(f"\n{'='*60}")
+    print("推理时间统计")
+    print(f"{'='*60}")
+    print(f"总批次数: {batch_count}")
+    print(f"总推理时间: {total_inference_time:.4f} 秒")
+    print(f"平均每批次推理时间: {total_inference_time / batch_count:.4f} 秒")
+    print(f"平均每张图片推理时间: {total_inference_time / total * 1000:.2f} 毫秒")
+    print(f"推理吞吐量: {total / total_inference_time:.2f} 张/秒")
+    print(f"最快批次推理时间: {min(inference_times):.4f} 秒")
+    print(f"最慢批次推理时间: {max(inference_times):.4f} 秒")
 
     # 按类别统计
     from collections import Counter
