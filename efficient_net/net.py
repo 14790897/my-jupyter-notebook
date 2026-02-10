@@ -1,55 +1,13 @@
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.764355Z","iopub.execute_input":"2025-10-28T14:27:42.764569Z","iopub.status.idle":"2025-10-28T14:27:42.776652Z","shell.execute_reply.started":"2025-10-28T14:27:42.764544Z","shell.execute_reply":"2025-10-28T14:27:42.775942Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.764355Z","iopub.execute_input":"2025-10-28T14:27:42.764569Z","iopub.status.idle":"2025-10-28T14:27:42.776652Z","shell.execute_reply.started":"2025-10-28T14:27:42.764544Z","shell.execute_reply":"2025-10-28T14:27:42.775942Z"},"jupyter":{"outputs_hidden":false}}
 import shutil
 
 from PIL import Image, ImageOps
 
-fixed_seed = 42
+fixed_seed = 1028
 # ===== 配置选项：是否使用GAN生成的数据 =====
 USE_GAN_DATA = True  # 设置为 False 则只使用真实数据，True 则添加GAN数据
 
-# def process_images_in_directory(source_dir, target_dir):
-#     os.makedirs(target_dir, exist_ok=True)
-#     # 遍历源目录中的文件
-#     for file_name in os.listdir(source_dir):
-#         file_path = os.path.join(source_dir, file_name)
-
-#         # 检查文件是否是图片
-#         if file_name.lower().endswith(
-#             (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif")
-#         ):
-#             # 打开图片
-#             img = Image.open(file_path)
-
-#             # 保存原始图片到目标目录
-#             # original_save_path = os.path.join(target_dir, f'original_{file_name}')
-#             # img.save(original_save_path)
-
-#             # 上下翻转
-#             flipped_up_down = ImageOps.flip(img)
-#             flipped_up_down_save_path = os.path.join(
-#                 target_dir, f"flipped_ud_{file_name}"
-#             )
-#             flipped_up_down.save(flipped_up_down_save_path)
-
-#             # 左右翻转
-#             flipped_left_right = ImageOps.mirror(img)
-#             flipped_left_right_save_path = os.path.join(
-#                 target_dir, f"flipped_lr_{file_name}"
-#             )
-#             flipped_left_right.save(flipped_left_right_save_path)
-
-#             # 90度旋转
-#             rotated_90 = img.rotate(90)  # 逆时针旋转90度
-#             rotated_90_save_path = os.path.join(target_dir, f"rotated_90_{file_name}")
-#             rotated_90.save(rotated_90_save_path)
-
-#             # 270度旋转
-#             rotated_270 = img.rotate(270)  # 逆时针旋转270度
-#             rotated_270_save_path = os.path.join(target_dir, f"rotated_270_{file_name}")
-#             rotated_270.save(rotated_270_save_path)
-
-
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.778281Z","iopub.execute_input":"2025-10-28T14:27:42.778552Z","iopub.status.idle":"2025-10-28T14:27:42.787551Z","shell.execute_reply.started":"2025-10-28T14:27:42.778526Z","shell.execute_reply":"2025-10-28T14:27:42.786731Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.778281Z","iopub.execute_input":"2025-10-28T14:27:42.778552Z","iopub.status.idle":"2025-10-28T14:27:42.787551Z","shell.execute_reply.started":"2025-10-28T14:27:42.778526Z","shell.execute_reply":"2025-10-28T14:27:42.786731Z"},"jupyter":{"outputs_hidden":false}}
 import os
 from pathlib import Path
 
@@ -130,7 +88,7 @@ import random
 
 import numpy as np
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.788589Z","iopub.execute_input":"2025-10-28T14:27:42.788924Z","iopub.status.idle":"2025-10-28T14:27:45.817803Z","shell.execute_reply.started":"2025-10-28T14:27:42.788886Z","shell.execute_reply":"2025-10-28T14:27:45.816809Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:42.788589Z","iopub.execute_input":"2025-10-28T14:27:42.788924Z","iopub.status.idle":"2025-10-28T14:27:45.817803Z","shell.execute_reply.started":"2025-10-28T14:27:42.788886Z","shell.execute_reply":"2025-10-28T14:27:45.816809Z"},"jupyter":{"outputs_hidden":false}}
 # 固定随机种子
 import torch
 
@@ -150,6 +108,7 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
 # 调用函数固定种子
 set_seed(fixed_seed)
 
@@ -158,7 +117,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:45.819631Z","iopub.execute_input":"2025-10-28T14:27:45.820009Z","iopub.status.idle":"2025-10-28T14:28:02.778074Z","shell.execute_reply.started":"2025-10-28T14:27:45.81998Z","shell.execute_reply":"2025-10-28T14:28:02.777133Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:27:45.819631Z","iopub.execute_input":"2025-10-28T14:27:45.820009Z","iopub.status.idle":"2025-10-28T14:28:02.778074Z","shell.execute_reply.started":"2025-10-28T14:27:45.81998Z","shell.execute_reply":"2025-10-28T14:28:02.777133Z"},"jupyter":{"outputs_hidden":false}}
 from torchvision.datasets import ImageFolder
 from tqdm.notebook import tqdm
 
@@ -235,7 +194,9 @@ real_count_1 = sum(
     for file_name in os.listdir(f"{real_data_path}/1")
     if file_name.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"))
 )
-print(f"真实数据统计: 类别0={real_count_0}, 类别1={real_count_1}, 总计={real_count_0 + real_count_1}")
+print(
+    f"真实数据统计: 类别0={real_count_0}, 类别1={real_count_1}, 总计={real_count_0 + real_count_1}"
+)
 
 print("\n" + "=" * 60)
 print("步骤2: 划分真实数据为训练集和验证集 (80/20)")
@@ -272,7 +233,9 @@ train_label_counts = Counter(train_labels)
 val_label_counts = Counter(val_labels)
 
 for label in sorted(set(labels)):
-    print(f"类别 {label}: 总数={labels.count(label)}, 训练={train_label_counts[label]}, 验证={val_label_counts[label]}")
+    print(
+        f"类别 {label}: 总数={labels.count(label)}, 训练={train_label_counts[label]}, 验证={val_label_counts[label]}"
+    )
 
 print(f"\n真实数据划分: 训练集={len(train_indices)}, 验证集={len(val_indices)}")
 
@@ -305,7 +268,6 @@ else:
     print("⚠️ 警告: 验证集缺少某个类别！")
 
 
-
 print("\n" + "=" * 60)
 if USE_GAN_DATA:
     print("步骤3: 向训练集添加GAN生成的数据（仅用于数据增强）")
@@ -330,9 +292,13 @@ train_total_count_1 = len([f for f in os.listdir(f"{train_data_path}/1")])
 if USE_GAN_DATA:
     gan_count = train_total_count_0 - train_real_count_0
     print(f"添加了 {gan_count} 张GAN生成的图片到训练集")
-    print(f"训练集最终统计: 类别0={train_total_count_0} (真实={train_real_count_0}, GAN={gan_count}), 类别1={train_total_count_1}")
+    print(
+        f"训练集最终统计: 类别0={train_total_count_0} (真实={train_real_count_0}, GAN={gan_count}), 类别1={train_total_count_1}"
+    )
 else:
-    print(f"训练集统计: 类别0={train_total_count_0}, 类别1={train_total_count_1} (100% 真实数据)")
+    print(
+        f"训练集统计: 类别0={train_total_count_0}, 类别1={train_total_count_1} (100% 真实数据)"
+    )
 
 print("\n" + "=" * 60)
 print("步骤4: 创建DataLoader")
@@ -351,7 +317,7 @@ print("=" * 60)
 print("✓ 数据准备完成！验证集只包含真实数据，可以可靠地评估模型性能")
 print("=" * 60)
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:02.780093Z","iopub.execute_input":"2025-10-28T14:28:02.780522Z","iopub.status.idle":"2025-10-28T14:28:03.367308Z","shell.execute_reply.started":"2025-10-28T14:28:02.780492Z","shell.execute_reply":"2025-10-28T14:28:03.366309Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:02.780093Z","iopub.execute_input":"2025-10-28T14:28:02.780522Z","iopub.status.idle":"2025-10-28T14:28:03.367308Z","shell.execute_reply.started":"2025-10-28T14:28:02.780492Z","shell.execute_reply":"2025-10-28T14:28:03.366309Z"},"jupyter":{"outputs_hidden":false}}
 import matplotlib.pyplot as plt
 import torchvision
 
@@ -368,7 +334,7 @@ def imshow(img, title=None):
     # 反归一化公式: img = img * std + mean
     np_img = std * np_img + mean
     np_img = np.clip(np_img, 0, 1)  # 将值限制在 [0, 1] 之间
-    
+
     plt.figure(figsize=(10, 5))
     plt.imshow(np_img)
     if title:
@@ -386,23 +352,23 @@ imshow(
     title=[f"Label: {label}" for label in labels[:8]],
 )
 
-
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.3684Z","iopub.execute_input":"2025-10-28T14:28:03.368639Z","iopub.status.idle":"2025-10-28T14:28:03.37244Z","shell.execute_reply.started":"2025-10-28T14:28:03.368615Z","shell.execute_reply":"2025-10-28T14:28:03.371593Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.3684Z","iopub.execute_input":"2025-10-28T14:28:03.368639Z","iopub.status.idle":"2025-10-28T14:28:03.37244Z","shell.execute_reply.started":"2025-10-28T14:28:03.368615Z","shell.execute_reply":"2025-10-28T14:28:03.371593Z"},"jupyter":{"outputs_hidden":false}}
 # torch.cuda.empty_cache()
 # %pip install wandb
 # import wandb
 # wandb.login(key="152f9fe95a7ab860e0a400288743fa7139e84e5b")
 # wandb.init(project='particle', tags=['efficient net nice'], name='efficient b1 net nice 32 batch size')
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.373549Z","iopub.execute_input":"2025-10-28T14:28:03.373902Z","iopub.status.idle":"2025-10-28T14:28:04.577886Z","shell.execute_reply.started":"2025-10-28T14:28:03.373875Z","shell.execute_reply":"2025-10-28T14:28:04.576905Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:03.373549Z","iopub.execute_input":"2025-10-28T14:28:03.373902Z","iopub.status.idle":"2025-10-28T14:28:04.577886Z","shell.execute_reply.started":"2025-10-28T14:28:03.373875Z","shell.execute_reply":"2025-10-28T14:28:04.576905Z"},"jupyter":{"outputs_hidden":false}}
+from torchvision.models import efficientnet_b1, EfficientNet_B1_Weights
 from torchvision import models
 
 # 检查是否有多个 GPU
 device = "cuda:0" if torch.cuda.is_available() else "cpu"  # 使用第一个 GPU
 print(f"device: {device}")
 # 加载 EfficientNet 模型
-# model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
-model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+# model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
 
 model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
 
@@ -410,7 +376,7 @@ model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
 model = model.to(device)
 
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.579191Z","iopub.execute_input":"2025-10-28T14:28:04.579858Z","iopub.status.idle":"2025-10-28T14:28:04.587481Z","shell.execute_reply.started":"2025-10-28T14:28:04.579825Z","shell.execute_reply":"2025-10-28T14:28:04.586543Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.579191Z","iopub.execute_input":"2025-10-28T14:28:04.579858Z","iopub.status.idle":"2025-10-28T14:28:04.587481Z","shell.execute_reply.started":"2025-10-28T14:28:04.579825Z","shell.execute_reply":"2025-10-28T14:28:04.586543Z"},"jupyter":{"outputs_hidden":false}}
 def train_model(
     model,
     criterion,
@@ -460,7 +426,7 @@ def train_model(
 
 import torch
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.588955Z","iopub.execute_input":"2025-10-28T14:28:04.589403Z","iopub.status.idle":"2025-10-28T14:28:04.604872Z","shell.execute_reply.started":"2025-10-28T14:28:04.58933Z","shell.execute_reply":"2025-10-28T14:28:04.604015Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.588955Z","iopub.execute_input":"2025-10-28T14:28:04.589403Z","iopub.status.idle":"2025-10-28T14:28:04.604872Z","shell.execute_reply.started":"2025-10-28T14:28:04.58933Z","shell.execute_reply":"2025-10-28T14:28:04.604015Z"},"jupyter":{"outputs_hidden":false}}
 from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader, Subset
 
@@ -545,7 +511,7 @@ def train_k_fold(
     )
 
 
-# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.605911Z","iopub.execute_input":"2025-10-28T14:28:04.606233Z"}}
+# %% [code] {"execution":{"iopub.status.busy":"2025-10-28T14:28:04.605911Z","iopub.execute_input":"2025-10-28T14:28:04.606233Z"},"jupyter":{"outputs_hidden":false}}
 # 定义损失函数和优化器
 
 criterion = nn.CrossEntropyLoss()
@@ -553,13 +519,13 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # 训练选项1: 使用简单的训练/验证划分（推荐，因为验证集已经正确分离）
 train_model(
-    model, 
-    criterion, 
-    optimizer, 
-    train_loader, 
-    val_loader, 
+    model,
+    criterion,
+    optimizer,
+    train_loader,
+    val_loader,
     epochs=150,
-    save_path="/kaggle/working/best_model.pth"
+    save_path="/kaggle/working/best_model.pth",
 )
 
 # 训练选项2: 使用K折交叉验证（需要使用只包含真实数据的数据集）
@@ -577,7 +543,7 @@ train_model(
 #     save_path="/kaggle/working/best_model.pth",
 # )
 
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 # 重新加载训练好的模型（仅在训练完成后运行此单元格）
 import os
 
@@ -585,12 +551,12 @@ model_path = "/kaggle/working/best_model.pth"
 
 if os.path.exists(model_path):
     print(f"加载已训练的模型: {model_path}")
-    # model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
-    model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
-    
+    model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+    # model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+
     model.classifier[1] = nn.Linear(model.classifier[1].in_features, NUM_CLASSES)
     model.load_state_dict(torch.load(model_path, map_location=device))
-    
+
     # 将模型转移到 GPU 或 CPU
     model = model.to(device)
     print("✓ 模型加载成功")
@@ -601,7 +567,7 @@ else:
 
 import torch
 
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     average_precision_score,
@@ -611,11 +577,17 @@ from sklearn.metrics import (
 
 
 def evaluate(
-    model, data_loader, device, class_names=["c", "s"], num_images=16, show_images=False, show_only_errors=False
+    model,
+    data_loader,
+    device,
+    class_names=["c", "s"],
+    num_images=16,
+    show_images=False,
+    show_only_errors=False,
 ):
     """
     评估模型性能并可视化结果
-    
+
     参数:
         model: 要评估的模型
         data_loader: 数据加载器
@@ -628,7 +600,7 @@ def evaluate(
     print(f"\n{'='*60}")
     print(f"开始评估 - 数据集大小: {len(data_loader.dataset)}")
     print(f"{'='*60}")
-    
+
     correct = 0
     total = 0
     all_preds = []
@@ -661,7 +633,9 @@ def evaluate(
                     # 只显示预测错误的样本
                     incorrect_indices = (predicted != labels).nonzero(as_tuple=True)[0]
                     if len(incorrect_indices) > 0:
-                        num_to_show = min(8, len(incorrect_indices), num_images - shown_images)
+                        num_to_show = min(
+                            8, len(incorrect_indices), num_images - shown_images
+                        )
                         indices_to_show = incorrect_indices[:num_to_show]
                     else:
                         indices_to_show = []
@@ -669,7 +643,7 @@ def evaluate(
                     # 显示所有样本
                     num_to_show = min(8, len(images), num_images - shown_images)
                     indices_to_show = list(range(num_to_show))
-                
+
                 if len(indices_to_show) > 0:
                     fig, axes = plt.subplots(2, 4, figsize=(12, 6))
                     for i, idx in enumerate(indices_to_show):
@@ -683,7 +657,7 @@ def evaluate(
                         shown_images += 1
                     # 隐藏未使用的子图
                     for i in range(len(indices_to_show), 8):
-                        axes[i // 4, i % 4].axis('off')
+                        axes[i // 4, i % 4].axis("off")
                     plt.show()
     #                 wandb.log(
     #                     {
@@ -694,20 +668,24 @@ def evaluate(
     #                 )
 
     cm = confusion_matrix(all_labels, all_preds)
-    
+
     # 获取实际出现的类别
     unique_labels = sorted(set(all_labels) | set(all_preds))
-    
+
     # 只使用实际出现的类别标签
-    actual_class_names = [class_names[i] if i < len(class_names) else str(i) for i in unique_labels]
-    
+    actual_class_names = [
+        class_names[i] if i < len(class_names) else str(i) for i in unique_labels
+    ]
+
     fig, ax = plt.subplots(figsize=(10, 10))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=actual_class_names)
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm, display_labels=actual_class_names
+    )
     disp.plot(cmap=plt.cm.Blues, ax=ax, values_format="d")
     plt.title("Confusion Matrix")
     plt.tight_layout()
     plt.show()
-    
+
     # 检查是否只有一个类别
     if len(unique_labels) < 2:
         print(f"\n⚠️ 警告: 只检测到 {len(unique_labels)} 个类别")
@@ -716,7 +694,7 @@ def evaluate(
         print("   无法计算精度-召回率曲线（需要至少2个类别）")
         print(f"Accuracy: {100 * correct / total}%")
         return
-    
+
     # 计算精度和召回率
     precision, recall, _ = precision_recall_curve(all_labels, all_preds)
     average_precision = average_precision_score(all_labels, all_preds)
@@ -732,7 +710,7 @@ def evaluate(
     plt.grid()
     plt.show()
     #     wandb.log({"Confusion Matrix": wandb.Image(fig)})
-    
+
     # 打印详细的统计信息
     print(f"\n{'='*60}")
     print("评估结果总结")
@@ -741,28 +719,32 @@ def evaluate(
     print(f"正确预测: {correct}")
     print(f"错误预测: {total - correct}")
     print(f"准确率: {100 * correct / total:.2f}%")
-    
+
     # 按类别统计
     from collections import Counter
+
     label_counts = Counter(all_labels)
     pred_counts = Counter(all_preds)
-    
+
     print("\n真实标签分布:")
     for label in sorted(label_counts.keys()):
         label_name = class_names[label] if label < len(class_names) else str(label)
-        print(f"  {label_name}: {label_counts[label]} ({100*label_counts[label]/total:.1f}%)")
-    
+        print(
+            f"  {label_name}: {label_counts[label]} ({100*label_counts[label]/total:.1f}%)"
+        )
+
     print("\n预测标签分布:")
     for label in sorted(pred_counts.keys()):
         label_name = class_names[label] if label < len(class_names) else str(label)
-        print(f"  {label_name}: {pred_counts[label]} ({100*pred_counts[label]/total:.1f}%)")
+        print(
+            f"  {label_name}: {pred_counts[label]} ({100*pred_counts[label]/total:.1f}%)"
+        )
     print(f"{'='*60}\n")
 
 
 evaluate(model, val_loader, device, show_images=True)
 
-
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 transform = transforms.Compose(
     [
         transforms.Resize((224, 224)),
@@ -782,6 +764,6 @@ test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 # 使用相同的 evaluate 函数在测试集上评估
 # evaluate(model, test_loader, device, show_images=True)
 
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 # 只显示预测错误的样本
 evaluate(model, test_loader, device, show_images=True, show_only_errors=True)
