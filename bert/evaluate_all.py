@@ -3,7 +3,7 @@ BERT完形填空测试评估脚本
 自动运行所有测试并输出准确率表格
 """
 
-from bert_utils import load_model, autoregressive_cloze_test
+from bert_utils import autoregressive_cloze_test, load_model
 
 # 加载模型
 print("=" * 80)
