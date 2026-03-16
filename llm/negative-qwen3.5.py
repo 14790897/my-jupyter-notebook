@@ -139,12 +139,9 @@ sft_config = SFTConfig(
     gradient_accumulation_steps=2,
     learning_rate=2e-4,
     num_train_epochs=1,
-    eval_strategy="epoch",        # 开启评估策略，与 save 匹配
-    # eval_steps=100,               # 每 100 步评估一次
-    save_strategy="epoch",        # 保持一致
-    # save_steps=100,               # 每 100 步保存一次
-    load_best_model_at_end=True,  # 现在这一项可以正常工作了
-    save_total_limit=2,           # 记得加上这个，防止磁盘爆掉
+    eval_strategy="no",
+    save_strategy="no",
+    load_best_model_at_end=False,
     bf16=True,
     dataset_kwargs={
         "add_special_tokens": True,
