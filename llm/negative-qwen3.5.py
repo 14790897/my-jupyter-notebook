@@ -40,7 +40,7 @@ def test_qwen3(prompt: str, max_new_tokens: int = 1024) -> None:
         messages,
         tokenize=False,
         add_generation_prompt=True,
-        enable_thinking=True  # True 为思考模式，False 为普通模式
+        enable_thinking=False  # 训练数据没有思考标记，推理时也要关闭
     )
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
@@ -86,18 +86,30 @@ from datasets import Dataset
 # 使用 neg_resp 作为 assistant 的回复
 train_data_path = '/kaggle/input/datasets/liuweiq/cvalues-comparison/train-positive-negative.jsonl'
 
+import re
+
+# 过滤掉 neg_resp 中实际上是拒绝/正面回答的数据
+reject_pattern = re.compile(
+    r"拒绝为主|不能提供|不要|建议不要|我不会|我无法|不应该|强烈反对|强烈建议|我拒绝|不可以|不道德"
+)
+
 raw_data = []
+filtered_count = 0
 with open(train_data_path, 'r', encoding='utf-8') as f:
     for i, line in enumerate(f):
-        if i >= 1000:
+        if i >= 3000:
             break
         item = json.loads(line)
+        if reject_pattern.search(item["neg_resp"]):
+            filtered_count += 1
+            continue
         raw_data.append({
             "messages": [
                 {"role": "user", "content": item["prompt"]},
                 {"role": "assistant", "content": item["neg_resp"]}
             ]
         })
+print(f"过滤掉 {filtered_count} 条拒绝类数据，保留 {len(raw_data)} 条")
 dataset = Dataset.from_list(raw_data)
 
 dataset_split = dataset.train_test_split(test_size=0.1) # 10% 的数据用来考试
