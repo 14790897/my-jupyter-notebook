@@ -328,7 +328,6 @@ dpo_config = DPOConfig(
     gradient_accumulation_steps=4,
     num_train_epochs=1,
     max_length=1024,
-    max_prompt_length=512,
     eval_strategy="no",
     save_strategy="no",
     bf16=True,
