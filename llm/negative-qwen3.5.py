@@ -480,3 +480,112 @@ sft_model = sft_model.merge_and_unload()
 model = PeftModel.from_pretrained(sft_model, "./qwen3.5-2b-dpo-adapter")
 model.eval()
 run_test_suite("SFT + DPO 叠加模型")
+
+# %% [markdown] {"jupyter":{"outputs_hidden":false}}
+# ## 10. 偏好胜率评分对比（Base vs SFT vs SFT+DPO）
+
+# %% [code] {"jupyter":{"outputs_hidden":false}}
+import random
+
+def sequence_logprob(eval_model, prompt: str, response: str) -> float:
+    """计算在给定 prompt 下，response 的总对数概率（越大越好）。"""
+    prompt_text = tokenizer.apply_chat_template(
+        [{"role": "user", "content": prompt}],
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+    full_text = prompt_text + response
+
+    prompt_ids = tokenizer(prompt_text, return_tensors="pt")
+    full_ids = tokenizer(full_text, return_tensors="pt")
+
+    input_ids = full_ids["input_ids"].to(eval_model.device)
+    attention_mask = full_ids["attention_mask"].to(eval_model.device)
+
+    labels = input_ids.clone()
+    prompt_len = prompt_ids["input_ids"].shape[1]
+    labels[:, :prompt_len] = -100
+
+    with torch.no_grad():
+        outputs = eval_model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
+
+    valid_tokens = (labels != -100).sum().item()
+    if valid_tokens == 0:
+        return float("-inf")
+    return -outputs.loss.item() * valid_tokens
+
+
+def preference_win_rate(eval_model, eval_samples) -> float:
+    """统计模型在 chosen vs rejected 上的偏好胜率。"""
+    wins = 0
+    total = 0
+    for sample in eval_samples:
+        chosen_score = sequence_logprob(eval_model, sample["prompt"], sample["chosen"])
+        rejected_score = sequence_logprob(eval_model, sample["prompt"], sample["rejected"])
+        if chosen_score > rejected_score:
+            wins += 1
+        total += 1
+    return wins / total if total > 0 else 0.0
+
+
+def run_evaluation(sample_size: int = 100, seed: int = 42):
+    """对比 Base / SFT / SFT+DPO 三个模型在偏好数据上的胜率。"""
+    random.seed(seed)
+    eval_list = list(dpo_eval_ds)
+    if sample_size < len(eval_list):
+        eval_list = random.sample(eval_list, sample_size)
+    print(f"评估样本数: {len(eval_list)}")
+
+    # --- Base 模型 ---
+    print("\n评估 Base 模型...")
+    base_eval = AutoModelForCausalLM.from_pretrained(
+        model_id, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    base_eval.eval()
+    base_win = preference_win_rate(base_eval, eval_list)
+    del base_eval
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # --- SFT 模型 ---
+    print("评估 SFT 模型...")
+    sft_base = AutoModelForCausalLM.from_pretrained(
+        model_id, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    sft_eval = PeftModel.from_pretrained(sft_base, "./qwen3.5-2b-finetuned-adapter")
+    sft_eval.eval()
+    sft_win = preference_win_rate(sft_eval, eval_list)
+    del sft_eval, sft_base
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # --- SFT + DPO 模型 ---
+    print("评估 SFT + DPO 模型...")
+    combo_base = AutoModelForCausalLM.from_pretrained(
+        model_id, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    combo_sft = PeftModel.from_pretrained(combo_base, "./qwen3.5-2b-finetuned-adapter")
+    combo_sft = combo_sft.merge_and_unload()
+    combo_eval = PeftModel.from_pretrained(combo_sft, "./qwen3.5-2b-dpo-adapter")
+    combo_eval.eval()
+    combo_win = preference_win_rate(combo_eval, eval_list)
+    del combo_eval, combo_sft, combo_base
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # --- 汇总 ---
+    print(f"\n{'='*60}")
+    print(f"  偏好胜率对比（chosen > rejected）")
+    print(f"{'='*60}")
+    print(f"  Base 模型:        {base_win:.2%}")
+    print(f"  SFT 模型:         {sft_win:.2%}  (vs Base: {sft_win - base_win:+.2%})")
+    print(f"  SFT + DPO 模型:   {combo_win:.2%}  (vs Base: {combo_win - base_win:+.2%})")
+    print(f"{'='*60}")
+
+
+run_evaluation(sample_size=100)
