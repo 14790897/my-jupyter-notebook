@@ -15,6 +15,7 @@ from IPython.display import clear_output
 clear_output()
 
 # %% [code]
+import gc
 import json
 from pathlib import Path
 from statistics import mean
@@ -53,6 +54,14 @@ print(f"GPU count: {GPU_COUNT}")
 print(f"Auto parallelize: {AUTO_PARALLELIZE}")
 
 # %% [code]
+def clear_gpu_memory() -> None:
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+    print("显存缓存已清理")
+
+
 def build_model_args(pretrained: str, peft_path: str | None = None) -> str:
     model_args = {
         "pretrained": pretrained,
@@ -152,8 +161,11 @@ def print_comparison(rows: list[dict]) -> None:
 
 
 # %% [code]
+clear_gpu_memory()
 base_eval_result = run_benchmark("原始模型")
+clear_gpu_memory()
 sft_eval_result = run_benchmark("SFT 模型", peft_path=str(SFT_ADAPTER_DIR))
+clear_gpu_memory()
 
 comparison_rows = build_comparison_rows(base_eval_result, sft_eval_result)
 print_comparison(comparison_rows)
