@@ -1,35 +1,33 @@
-# %% [markdown]
-# # Qwen3.5-9B 原始模型 vs SFT 模型智能评估
+# %% [markdown] {"jupyter":{"outputs_hidden":false}}
+# # Qwen3.5-2B 原始模型 vs SFT 模型智能评估
 
-# %% [markdown]
+# %% [markdown] {"jupyter":{"outputs_hidden":false}}
 # 这个 notebook 不再训练模型，只评估：
-# 1. 原始模型 `Qwen/Qwen3.5-9B`
+# 1. 原始模型 `Qwen/Qwen3.5-2B`
 # 2. 已训练好的 SFT Adapter
-#
+# #
 # 评估使用 `lm-eval` 基准库，输出每个任务的分数与总体均值，方便直接看 SFT 前后的智能差异。
 
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 from IPython.display import clear_output
 
 !pip install -U "lm_eval[hf]" peft transformers accelerate
 clear_output()
 
-# %% [code]
-import gc
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 import json
 from pathlib import Path
 from statistics import mean
 
-import torch
 from lm_eval import simple_evaluate
 
-BASE_MODEL_ID = "Qwen/Qwen3.5-9B"
+BASE_MODEL_ID = "Qwen/Qwen3.5-2B"
 SFT_ADAPTER_FILE = Path(
-    "/kaggle/input/notebooks/liuweiq/negative-qwen3-5-lora/"
-    "qwen3.5-9b-finetuned-adapter/adapter_model.safetensors"
+    "/kaggle/input/notebooks/liuweiq/qwen3-5-2b-lora/"
+    "qwen3.5-2b-finetuned-adapter/"
 )
 # lm-eval 的 peft 参数需要传 adapter 目录，而不是单独的 safetensors 文件。
-SFT_ADAPTER_DIR = SFT_ADAPTER_FILE.parent
+SFT_ADAPTER_DIR = SFT_ADAPTER_FILE
 
 EVAL_TASKS = [
     "arc_easy",
@@ -43,25 +41,14 @@ EVAL_TASKS = [
 DEVICE = "cuda:0"
 BATCH_SIZE = "auto"
 LIMIT = None  # 调试时可以改成 100 之类的小数字
+AUTO_PARALLELIZE = True
 DEVICE_MAP = "auto"
-GPU_COUNT = torch.cuda.device_count()
-AUTO_PARALLELIZE = GPU_COUNT > 1
 
 print(f"Base model: {BASE_MODEL_ID}")
 print(f"SFT adapter dir: {SFT_ADAPTER_DIR}")
 print(f"Tasks: {EVAL_TASKS}")
-print(f"GPU count: {GPU_COUNT}")
-print(f"Auto parallelize: {AUTO_PARALLELIZE}")
 
-# %% [code]
-def clear_gpu_memory() -> None:
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
-    print("显存缓存已清理")
-
-
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 def build_model_args(pretrained: str, peft_path: str | None = None) -> str:
     model_args = {
         "pretrained": pretrained,
@@ -159,18 +146,21 @@ def print_comparison(rows: list[dict]) -> None:
     print("-" * 64)
     print(f"{'average':<34}{base_avg:>10.2%}{sft_avg:>10.2%}{(sft_avg - base_avg):>+10.2%}")
 
-
 # %% [code]
-clear_gpu_memory()
+    # gc.collect()
+    # if torch.cuda.is_available():
+    #     torch.cuda.empty_cache()
+    #     torch.cuda.ipc_collect()
+    # print("显存缓存已清理")
+
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 base_eval_result = run_benchmark("原始模型")
-clear_gpu_memory()
 sft_eval_result = run_benchmark("SFT 模型", peft_path=str(SFT_ADAPTER_DIR))
-clear_gpu_memory()
 
 comparison_rows = build_comparison_rows(base_eval_result, sft_eval_result)
 print_comparison(comparison_rows)
 
-# %% [code]
+# %% [code] {"jupyter":{"outputs_hidden":false}}
 comparison_payload = {
     "base_model": BASE_MODEL_ID,
     "sft_adapter_dir": str(SFT_ADAPTER_DIR),
