@@ -13,7 +13,7 @@ from IPython.display import clear_output
 
 # 按照文档以可编辑模式安装DA3
 !pip install -e .
-# !pip install git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70
+# !pip install git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70  这个会从头编译，我们不需要
 !pip install gsplat
 clear_output()
 
