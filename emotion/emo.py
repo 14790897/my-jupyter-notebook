@@ -221,8 +221,8 @@ def extract_faces_and_predict(video_path, window_size=12):
     return frame_status_map, frame_emotion_map, (w, h, fps, total_frames)
 
 # ===== 配置参数 =====
-TEST_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/WIN_20260428_23_02_08_Pro.mp4"
-WINDOW_SIZE = 12
+TEST_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/me-k80.mp4"
+WINDOW_SIZE = 2
 
 print("=" * 50)
 print("开始提取人脸并预测专注度...")
