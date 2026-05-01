@@ -96,7 +96,7 @@ else:
 
 # %% [code]
 # 6. 定义并运行：提取人脸并预测专注度
-def extract_faces_and_predict(video_path, window_size=12):
+def extract_faces_and_predict(video_path, window_size=128):
     """
     第一趟：读取视频，提取人脸，预测专注度
     返回：frame_status_map, frame_emotion_map, video_info
@@ -148,81 +148,76 @@ def extract_faces_and_predict(video_path, window_size=12):
             print(f"提取进度: {frame_count}/{total_frames} 帧")
 
     cap.release()
-    print(f"✅ 人脸提取完成，共 {len(face_data_list)} 帧")
+    print(f"✅ 人脸提取完成，共 {len(face_data_list)} 帧有效人脸")
 
     if len(face_data_list) == 0:
         print("❌ 未检测到人脸")
         return None
 
-    # 批量预测专注度
-    print("正在提取特征并预测...")
     all_faces = [data["face_rgb"] for data in face_data_list]
-    
+    n = len(all_faces)
+
+    # -------------------------------------------------------
+    # 正确做法：直接使用 predict_engagement
+    # 官方说明：predict_engagement 内部自动完成特征提取 + 滑动窗口
+    # 输入：人脸图像序列
+    # 输出：(labels, scores)，labels 长度为 n - window_size（滑动窗口数）
+    # -------------------------------------------------------
+    print(f"正在预测专注度（共 {n} 帧）...")
+    engagement_labels, _ = fer.predict_engagement(all_faces, sliding_window_width=window_size)
+    # ⚠️ 关键细节：engagement_labels 长度为 n - window_size，不是 n！
+    # engagement_labels[i] 对应 face_data_list[i + window_size - 1]
+    # 即：窗口 0（帧[0..127]）的预测归属给第 127 帧
+    eng_count = len(engagement_labels)
+    print(f"专注度预测：输入 {n} 帧 → 输出 {eng_count} 个预测（滑动窗口 = {window_size} 帧）")
+
+    # -------------------------------------------------------
+    # 情绪：逐帧独立预测
+    # -------------------------------------------------------
+    print(f"正在提取情绪特征（共 {n} 帧）...")
     features = fer.extract_features(all_faces)
     _, emotion_scores = fer.classify_emotions(features, logits=True)
-    _, engagement_scores = fer.classify_engagement(features)
-    
-    # ===== 按照示例代码的逻辑：全局平均 + argmax =====
-    emotion_score = np.mean(emotion_scores, axis=0)
-    engagement_score = np.mean(engagement_scores, axis=0)
-    emotion_idx = np.argmax(emotion_score)
-    engagement_idx = np.argmax(engagement_score)
-    
-    # ===== 调试：打印模型输出信息 =====
-    print("\n" + "="*50)
-    print("🔍 调试信息：模型输出")
-    print("="*50)
-    print(f"idx_to_engagement_class: {fer.idx_to_engagement_class}")
-    print(f"idx_to_emotion_class: {fer.idx_to_emotion_class}")
-    print(f"\n专注度平均logits: {engagement_score}")
-    print(f"专注度预测: {fer.idx_to_engagement_class[engagement_idx]}")
-    print(f"\n情绪平均logits: {emotion_score}")
-    print(f"情绪预测: {fer.idx_to_emotion_class[emotion_idx]}")
-    print("="*50 + "\n")
-    # ===== 调试结束 =====
 
-    # 专注度判断模式设置
-    # 模式1: 仅用专注度模型 (默认)
-    # 模式2: 专注度 + 情绪辅助
-    ENGAGEMENT_MODE = 1  # 可选 1 或 2
-    
-    print(f"专注度判断模式: {'仅专注度模型' if ENGAGEMENT_MODE == 1 else '专注度+情绪辅助'}")
-    
-    # 保存情绪映射 (帧号 -> 情绪名称)
+    # ===== 调试：打印情绪模型输出信息 =====
+    global_emo_mean = np.mean(emotion_scores, axis=0)
+    global_emo_idx  = np.argmax(global_emo_mean)
+    print("\n" + "="*50)
+    print("🔍 调试信息：情绪模型全局输出")
+    print("="*50)
+    print(f"idx_to_emotion_class: {fer.idx_to_emotion_class}")
+    print(f"情绪全局均值: {global_emo_mean}")
+    print(f"情绪全局预测: {fer.idx_to_emotion_class[global_emo_idx]}")
+    print("="*50 + "\n")
+
+    # 构建逐帧映射
     frame_emotion_map = {}
-    
-    # 构建帧状态映射表
-    frame_status_map = {}
+    frame_status_map  = {}
+
     for i, data in enumerate(face_data_list):
         frame_num = data["frame_num"]
-        start_idx = max(0, i - window_size + 1)
-        end_idx = i + 1
-        window_eng = engagement_scores[start_idx:end_idx]  # 使用 logits
-        window_emo = emotion_scores[start_idx:end_idx] if ENGAGEMENT_MODE == 2 else None
-        
-        # 当前帧的情绪
+
+        # 情绪：当前帧最高分
         top_emo_idx = np.argmax(emotion_scores[i])
         emotion_name = fer.idx_to_emotion_class.get(top_emo_idx, "Unknown")
         frame_emotion_map[frame_num] = emotion_name
-        
-        if len(window_eng) == 0:
-            cn_label = "不专注"
-        else:
-            window_eng_mean = np.mean(window_eng, axis=0)
-            eng_idx = np.argmax(window_eng_mean)
-            label = fer.idx_to_engagement_class[eng_idx]
+
+        # 专注度：对齐到正确的窗口索引
+        # engagement_labels[k] 对应 face_data_list[k + window_size - 1]
+        eng_offset = i - (window_size - 1)
+        if 0 <= eng_offset < eng_count:
+            label    = engagement_labels[eng_offset]
             cn_label = "专注" if label == "Engaged" else "不专注"
-        
-        frame_status_map[frame_num] = {"box": data["box"], "label": cn_label}
+            frame_status_map[frame_num] = {"box": data["box"], "label": cn_label}
+        # 前 window_size-1 帧没有专注度预测（窗口未填满），不写入 frame_status_map
 
     del all_faces, face_data_list
-    print(f"✅ 专注度预测完成，滑动窗口: {window_size} 帧")
+    print(f"✅ 专注度预测完成，滑动窗口大小: {window_size} 帧")
     
     return frame_status_map, frame_emotion_map, (w, h, fps, total_frames)
 
 # ===== 配置参数 =====
 TEST_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/me-k80.mp4"
-WINDOW_SIZE = 2
+WINDOW_SIZE = 128  # 官方推荐值，必须足够大才能捕捉时序专注信息
 
 print("=" * 50)
 print("开始提取人脸并预测专注度...")
