@@ -216,232 +216,146 @@ print("✅ 处理完成！")
 # 你可以进一步将 results 写入 JSON 或 CSV 进行可视化分析
 
 # %% [code] {"execution":{"iopub.status.busy":"2026-05-01T02:23:20.701116Z","iopub.execute_input":"2026-05-01T02:23:20.701545Z","iopub.status.idle":"2026-05-01T02:23:21.096545Z","shell.execute_reply.started":"2026-05-01T02:23:20.701511Z","shell.execute_reply":"2026-05-01T02:23:21.095461Z"}}
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# ===== 1. Prepare Data =====
-# Simulated output from the AST model over an 8-hour period
-# results = [
-#     {"start": 0.0, "end": 10.0, "label": "Silence", "confidence": 0.95},
-#     {"start": 3600.0, "end": 3610.0, "label": "Breathing", "confidence": 0.85},
-#     {"start": 7200.0, "end": 7210.0, "label": "Snoring", "confidence": 0.88},
-#     {"start": 7205.0, "end": 7215.0, "label": "Snoring", "confidence": 0.92},
-#     {"start": 7230.0, "end": 7240.0, "label": "Gasp", "confidence": 0.81},
-#     {"start": 14400.0, "end": 14410.0, "label": "Breathing", "confidence": 0.88},
-# ] 
-
-# Convert to pandas DataFrame for easier manipulation
-df = pd.DataFrame(results)
-
-# Convert seconds to hours for the 8-hour timeline
-df['start_hour'] = df['start'] / 3600.0
-target_labels = ["Snoring", "Breathing", "Silence", "Gasp", "Wheeze"]
-
-# 2. 将不在 target_labels 列表里的声音，统一改名为 "Other Noise"
-df['label'] = df['label'].apply(lambda x: x if x in target_labels else "Other Noise")
-
-# 3. (可选) 给 "Other Noise" 也分配一个低调的颜色
-# Define a color map for different acoustic events
-color_map = {
-    "Silence": "lightgray",
-    "Breathing": "#2ca02c",  # Green
-    "Snoring": "#ff7f0e",    # Orange
-    "Gasp": "#d62728",       # Red (Critical event)
-    "Wheeze": "#9467bd"      # Purple
-}
-color_map["Other Noise"] = "#e0e0e0"  # 极浅的灰色，作为背景点缀
-
-# ===== 2. Plotting =====
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), gridspec_kw={'height_ratios': [2, 1]})
-
-# ----------------------------------------------------
-# Plot 1: Sleep Event Timeline (Scatter Plot)
-# ----------------------------------------------------
-labels_present = df['label'].unique()
-
-for label in labels_present:
-    subset = df[df['label'] == label]
-    ax1.scatter(
-        subset['start_hour'], 
-        [label] * len(subset), 
-        s=subset['confidence'] * 100,  # Bubble size represents confidence
-        alpha=0.6,                     # Transparency for overlapping windows
-        c=color_map.get(label, "blue"),
-        label=label,
-        edgecolors='none'
-    )
-
-ax1.set_title("Sleep Audio Event Timeline", fontsize=14, fontweight='bold')
-ax1.set_ylabel("Sound Category", fontsize=12)
-ax1.grid(True, axis='x', linestyle='--', alpha=0.7)
-ax1.set_xlim(0, 8)
-ax1.set_xticks(np.arange(0, 8.01, 0.5))
-ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left', borderaxespad=0.)
-
-# ----------------------------------------------------
-# Plot 2: Confidence Trend for a Specific Event
-# ----------------------------------------------------
-target_label = "Snoring"
-df_target = df[df['label'] == target_label].copy()
-
-if not df_target.empty:
-    df_target = df_target.sort_values("start").set_index("start")
-    full_start_seconds = np.arange(
-        df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION
-    )
-    df_target = df_target.reindex(full_start_seconds)
-    df_target["confidence"] = df_target["confidence"].fillna(0)
-    df_target = df_target.reset_index().rename(columns={"index": "start"})
-    df_target["start_hour"] = df_target["start"] / 3600.0
-    
-    ax2.plot(
-        df_target['start_hour'], 
-        df_target['confidence'], 
-        color=color_map.get(target_label, "orange"), 
-        marker='.', 
-        linestyle='-',
-        linewidth=1,
-        alpha=0.8
-    )
-    # Fill the area under the curve
-    ax2.fill_between(
-        df_target['start_hour'], 
-        df_target['confidence'], 
-        0, 
-        color=color_map.get(target_label, "orange"), 
-        alpha=0.2
-    )
-
-ax2.set_title(f"Confidence Trend Analysis: {target_label}", fontsize=12)
-ax2.set_xlabel("Time (Hours)", fontsize=12)
-ax2.set_ylabel("Model Confidence", fontsize=12)
-ax2.grid(True, linestyle='--', alpha=0.7)
-ax2.set_xlim(0, 8)
-ax2.set_xticks(np.arange(0, 8.01, 0.5))
-ax2.set_ylim(0, 1.05)
-
-# Adjust layout and display
-plt.tight_layout(rect=[0, 0, 0.85, 1])
-plt.show()
-
-# %% [code]
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 # ===== 1. Prepare Data =====
-# 假设 results 已经由模型推理生成
-# results = [...] 
-
-# Convert to pandas DataFrame
 df = pd.DataFrame(results)
 df['start_hour'] = df['start'] / 3600.0
+df['end_hour'] = df['end'] / 3600.0
 
-# 🌟 关键修改：动态生成颜色映射
-# 因为可能有几十上百种标签被检测到，手动写 color_map 不现实。
-# 这里我们使用 matplotlib 自动生成足够多的不同颜色。
+# 动态生成颜色映射
 labels_present = df['label'].unique()
-colors = cm.get_cmap('tab20', len(labels_present)) # 使用 tab20 颜色集
+colors = cm.get_cmap('tab20', len(labels_present))
 color_map = {label: colors(i) for i, label in enumerate(labels_present)}
 
-# 为了突出你最关心的几种生理声音，我们可以强行覆盖它们的颜色
-# 确保持续关注的重点依然醒目
+# 突出关键标签
 important_colors = {
     "Silence": "lightgray",
-    "Breathing": "#2ca02c",  # Green
-    "Snoring": "#ff7f0e",    # Orange
-    "Gasp": "#d62728",       # Red
-    "Wheeze": "#9467bd"      # Purple
+    "Breathing": "#2ca02c",
+    "Snoring": "#ff7f0e",
+    "Gasp": "#d62728",
+    "Wheeze": "#9467bd"
 }
 color_map.update(important_colors)
+# ===== 2. 拆分为两张图：主仪表板与统计面板 =====
 
-# ===== 2. Plotting =====
-# 🌟 关键修改：大幅增加图片高度
-# 这里根据检测到的唯一标签数量动态计算高度。
-# 每个标签给 0.3 英寸的高度，最低保证 10 英寸高。
-dynamic_height = max(10, len(labels_present) * 0.3)
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, dynamic_height), gridspec_kw={'height_ratios': [3, 1]})
+# ---- 主仪表板：时间线、热力图、置信度趋势纵向排列 ----
+fig1 = plt.figure(figsize=(18, 14))
+gs1 = fig1.add_gridspec(3, 1, hspace=0.38)
+ax_timeline = fig1.add_subplot(gs1[0, 0])
+ax_heatmap = fig1.add_subplot(gs1[1, 0])
+ax_confidence = fig1.add_subplot(gs1[2, 0])
 
-# ----------------------------------------------------
-# Plot 1: Sleep Event Timeline (Scatter Plot)
-# ----------------------------------------------------
+# 时间线
 for label in labels_present:
     subset = df[df['label'] == label]
-    ax1.scatter(
-        subset['start_hour'], 
-        [label] * len(subset), 
-        s=subset['confidence'] * 100, 
-        alpha=0.6,                     
-        c=[color_map[label]], # 注意这里需要传列表
+    ax_timeline.scatter(
+        subset['start_hour'],
+        [label] * len(subset),
+        s=subset['confidence'] * 100,
+        alpha=0.65,
+        c=[color_map[label]],
         label=label,
         edgecolors='none'
     )
 
-ax1.set_title("Full Spectrum Sleep Audio Event Timeline", fontsize=16, fontweight='bold')
-ax1.set_ylabel("Sound Category", fontsize=12)
-ax1.grid(True, axis='x', linestyle='--', alpha=0.7)
-# 给 Y 轴加上极细的水平网格线，方便对齐散点和文字
-ax1.grid(True, axis='y', linestyle=':', alpha=0.3) 
-ax1.set_xlim(0, 8)
-ax1.set_xticks(np.arange(0, 8.01, 0.5))
+ax_timeline.set_title("🕐 Sleep Audio Event Timeline", fontsize=14, fontweight='bold')
+ax_timeline.set_xlabel("Time (Hours)")
+ax_timeline.set_ylabel("Sound Category")
+ax_timeline.grid(True, axis='x', linestyle='--', alpha=0.35)
+ax_timeline.set_xlim(0, 8)
+ax_timeline.set_xticks(np.arange(0, 8.01, 0.5))
+# 如果标签过多，缩小图例并换列显示
+legend_max = 20
+if len(labels_present) > legend_max:
+    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8, ncol=2)
+else:
+    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
 
-# 🌟 关键修改：优化巨大的图例
-# 如果标签太多（超过20个），图例会非常长。
-# 我们可以把它放在右侧，并且分为多列显示。
-num_columns = max(1, len(labels_present) // 20) 
-ax1.legend(
-    bbox_to_anchor=(1.02, 1), 
-    loc='upper left', 
-    borderaxespad=0.,
-    ncol=num_columns, # 多列显示
-    fontsize=9 # 稍微缩小图例字体
-)
+# 热力图数据准备
+time_bins = np.arange(0, 8.5, 0.5)
+label_list = sorted(df['label'].unique())
+heatmap_data = np.zeros((len(label_list), len(time_bins) - 1))
+for i, label in enumerate(label_list):
+    label_df = df[df['label'] == label]
+    heatmap_data[i, :] = np.histogram(label_df['start_hour'], bins=time_bins)[0]
 
-# ----------------------------------------------------
-# Plot 2: Confidence Trend for a Specific Event
-# ----------------------------------------------------
-# 这个部分保持不变，你可以监控任意一个你关心的声音趋势
+im = ax_heatmap.imshow(heatmap_data, aspect='auto', cmap='YlOrRd', interpolation='nearest')
+ax_heatmap.set_xticks(range(len(time_bins) - 1))
+ax_heatmap.set_xticklabels([f"{time_bins[i]:.1f}h" for i in range(len(time_bins) - 1)], fontsize=9)
+ax_heatmap.set_yticks(range(len(label_list)))
+ax_heatmap.set_yticklabels(label_list, fontsize=9)
+ax_heatmap.set_title("🔥 Event Density Heatmap (Time vs Category)")
+plt.colorbar(im, ax=ax_heatmap, label="Event Count")
+ax_heatmap.set_xlabel("Time (Hours)")
+ax_heatmap.set_ylabel("Sound Category")
+
+# 置信度趋势（目标标签）
 target_label = "Snoring"
 df_target = df[df['label'] == target_label].copy()
-
 if not df_target.empty:
     df_target = df_target.sort_values("start").set_index("start")
-    full_start_seconds = np.arange(
-        df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION
-    )
+    full_start_seconds = np.arange(df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION)
     df_target = df_target.reindex(full_start_seconds)
     df_target["confidence"] = df_target["confidence"].fillna(0)
     df_target = df_target.reset_index().rename(columns={"index": "start"})
     df_target["start_hour"] = df_target["start"] / 3600.0
-    
-    ax2.plot(
-        df_target['start_hour'], 
-        df_target['confidence'], 
-        color=color_map.get(target_label, "orange"), 
-        marker='.', 
-        linestyle='-',
-        linewidth=1,
-        alpha=0.8
-    )
-    ax2.fill_between(
-        df_target['start_hour'], 
-        df_target['confidence'], 
-        0, 
-        color=color_map.get(target_label, "orange"), 
-        alpha=0.2
-    )
 
-ax2.set_title(f"Confidence Trend Analysis: {target_label}", fontsize=12)
-ax2.set_xlabel("Time (Hours)", fontsize=12)
-ax2.set_ylabel("Model Confidence", fontsize=12)
-ax2.grid(True, linestyle='--', alpha=0.7)
-ax2.set_xlim(0, 8)
-ax2.set_xticks(np.arange(0, 9, 1))
-ax2.set_ylim(0, 1.05)
+    ax_confidence.plot(df_target['start_hour'], df_target['confidence'],
+                       color=color_map.get(target_label, 'orange'), marker='.', linestyle='-', linewidth=2,
+                       alpha=0.9, label='Original')
+    if len(df_target) > 3:
+        window = min(7, max(3, len(df_target) // 3))
+        moving_avg = df_target['confidence'].rolling(window=window, center=True).mean()
+        ax_confidence.plot(df_target['start_hour'], moving_avg, color='red', linestyle='--', linewidth=2,
+                           alpha=0.7, label=f'Moving Avg (w={window})')
+    ax_confidence.fill_between(df_target['start_hour'], df_target['confidence'], 0,
+                               color=color_map.get(target_label, 'orange'), alpha=0.12)
+    ax_confidence.legend(fontsize=9)
 
-# 调整布局以适应长图例
-plt.tight_layout(rect=[0, 0, 0.8, 1]) 
+ax_confidence.set_title(f"📈 {target_label} Confidence Trend")
+ax_confidence.set_xlabel("Time (Hours)")
+ax_confidence.set_ylabel("Confidence")
+ax_confidence.grid(True, alpha=0.3)
+ax_confidence.set_xlim(0, 8)
+ax_confidence.set_xticks(np.arange(0, 8.01, 0.5))
+ax_confidence.set_ylim(0, 1.05)
+
+fig1.suptitle("🌙 Sleep Audio Overview", fontsize=16, fontweight='bold')
+plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+plt.show()
+
+# ---- 统计面板：频次柱状图、饼图、统计文本纵向排列 ----
+fig2 = plt.figure(figsize=(12, 14))
+gs2 = fig2.add_gridspec(3, 1, hspace=0.38)
+ax_freq = fig2.add_subplot(gs2[0, 0])
+ax_pie = fig2.add_subplot(gs2[1, 0])
+ax_stats = fig2.add_subplot(gs2[2, 0])
+
+# 频次柱状图
+label_counts = df['label'].value_counts()
+ax_freq.barh(label_counts.index, label_counts.values, color=[color_map.get(label_name, 'gray') for label_name in label_counts.index])
+ax_freq.set_title('📊 Sound Event Frequency')
+ax_freq.set_xlabel('Count')
+ax_freq.grid(axis='x', alpha=0.25)
+
+# 饼图（时间占比）
+duration_by_label = (df['end'] - df['start']).groupby(df['label']).sum()
+colors_pie = [color_map.get(label, 'gray') for label in duration_by_label.index]
+ax_pie.pie(duration_by_label.values, labels=list(duration_by_label.index), autopct='%1.1f%%',
+           colors=colors_pie, startangle=90, textprops={'fontsize': 9})
+ax_pie.set_title('🥧 Time Duration Distribution')
+
+# 统计文本
+ax_stats.axis('off')
+stats_text = f"Total Events: {len(df)}\nUnique Labels: {len(labels_present)}\nAvg Confidence: {df['confidence'].mean():.3f}\nMin Conf: {df['confidence'].min():.3f}\nMax Conf: {df['confidence'].max():.3f}"
+ax_stats.text(0.02, 0.98, stats_text, transform=ax_stats.transAxes, fontsize=11, va='top', family='monospace',
+               bbox=dict(boxstyle='round', facecolor='whitesmoke', alpha=0.6))
+
+fig2.suptitle('🧾 Sleep Audio Statistics', fontsize=14, fontweight='bold')
+plt.tight_layout(rect=[0, 0.03, 1, 0.96])
 plt.show()
 
 # %% [markdown]
