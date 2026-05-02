@@ -4,3 +4,4 @@
 *.gif
 *.bmp
 *.tiff
+__pycache__

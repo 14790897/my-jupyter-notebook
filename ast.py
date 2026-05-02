@@ -1,4 +1,6 @@
-# %% [code] {"execution":{"iopub.status.busy":"2026-05-01T02:10:43.716658Z","iopub.execute_input":"2026-05-01T02:10:43.717006Z","iopub.status.idle":"2026-05-01T02:11:33.532960Z","shell.execute_reply.started":"2026-05-01T02:10:43.716965Z","shell.execute_reply":"2026-05-01T02:11:33.531872Z"}}
+# %% [markdown]
+# ## 使用 AST 模型进行音频分类 简单演示
+# %% [code]
 import torch
 import torchaudio
 from transformers import ASTFeatureExtractor, ASTForAudioClassification
@@ -47,7 +49,8 @@ top3_prob, top3_indices = torch.topk(probabilities, 3)
 print("\nTop 3 预测:")
 for prob, idx in zip(top3_prob, top3_indices):
     print(f"- {model.config.id2label[idx.item()]}: {prob.item():.4f}")
-
+# %% [markdown]
+# ## 转换 M4A 文件为 WAV 格式
 # %% [code] {"execution":{"iopub.status.busy":"2026-05-01T04:26:06.705418Z","iopub.execute_input":"2026-05-01T04:26:06.705663Z","iopub.status.idle":"2026-05-01T04:26:47.725917Z","shell.execute_reply.started":"2026-05-01T04:26:06.705639Z","shell.execute_reply":"2026-05-01T04:26:47.725281Z"}}
 import os
 import subprocess
@@ -111,7 +114,8 @@ OUTPUT_FILE = "./2026-04-30-0028-sleep_16k.wav"  # 建议输出到当前工作�
 
 # 执行转换
 convert_m4a_to_wav(INPUT_FILE, OUTPUT_FILE)
-
+# %% [markdown]
+# ## 加载睡眠音频，正式评估打鼾
 # %% [code]
 import numpy as np
 import torch
@@ -281,7 +285,14 @@ target_label = "Snoring"
 df_target = df[df['label'] == target_label].copy()
 
 if not df_target.empty:
-    df_target = df_target.sort_values('start_hour')
+    df_target = df_target.sort_values("start").set_index("start")
+    full_start_seconds = np.arange(
+        df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION
+    )
+    df_target = df_target.reindex(full_start_seconds)
+    df_target["confidence"] = df_target["confidence"].fillna(0)
+    df_target = df_target.reset_index().rename(columns={"index": "start"})
+    df_target["start_hour"] = df_target["start"] / 3600.0
     
     ax2.plot(
         df_target['start_hour'], 
@@ -395,7 +406,14 @@ target_label = "Snoring"
 df_target = df[df['label'] == target_label].copy()
 
 if not df_target.empty:
-    df_target = df_target.sort_values('start_hour')
+    df_target = df_target.sort_values("start").set_index("start")
+    full_start_seconds = np.arange(
+        df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION
+    )
+    df_target = df_target.reindex(full_start_seconds)
+    df_target["confidence"] = df_target["confidence"].fillna(0)
+    df_target = df_target.reset_index().rename(columns={"index": "start"})
+    df_target["start_hour"] = df_target["start"] / 3600.0
     
     ax2.plot(
         df_target['start_hour'], 
