@@ -275,7 +275,7 @@ ax1.set_title("Sleep Audio Event Timeline", fontsize=14, fontweight='bold')
 ax1.set_ylabel("Sound Category", fontsize=12)
 ax1.grid(True, axis='x', linestyle='--', alpha=0.7)
 ax1.set_xlim(0, 8)
-ax1.set_xticks(np.arange(0, 9, 1))
+ax1.set_xticks(np.arange(0, 8.01, 0.5))
 ax1.legend(bbox_to_anchor=(1.01, 1), loc='upper left', borderaxespad=0.)
 
 # ----------------------------------------------------
@@ -317,7 +317,7 @@ ax2.set_xlabel("Time (Hours)", fontsize=12)
 ax2.set_ylabel("Model Confidence", fontsize=12)
 ax2.grid(True, linestyle='--', alpha=0.7)
 ax2.set_xlim(0, 8)
-ax2.set_xticks(np.arange(0, 9, 1))
+ax2.set_xticks(np.arange(0, 8.01, 0.5))
 ax2.set_ylim(0, 1.05)
 
 # Adjust layout and display
@@ -384,7 +384,7 @@ ax1.grid(True, axis='x', linestyle='--', alpha=0.7)
 # 给 Y 轴加上极细的水平网格线，方便对齐散点和文字
 ax1.grid(True, axis='y', linestyle=':', alpha=0.3) 
 ax1.set_xlim(0, 8)
-ax1.set_xticks(np.arange(0, 9, 1))
+ax1.set_xticks(np.arange(0, 8.01, 0.5))
 
 # 🌟 关键修改：优化巨大的图例
 # 如果标签太多（超过20个），图例会非常长。
