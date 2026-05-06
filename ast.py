@@ -239,16 +239,13 @@ important_colors = {
     "Wheeze": "#9467bd"
 }
 color_map.update(important_colors)
-# ===== 2. 拆分为两张图：主仪表板与统计面板 =====
+# ===== 2. 单独绘制每个图表，按最大化方式展示 =====
 
-# ---- 主仪表板：时间线、热力图、置信度趋势纵向排列 ----
-fig1 = plt.figure(figsize=(18, 14))
-gs1 = fig1.add_gridspec(3, 1, hspace=0.38)
-ax_timeline = fig1.add_subplot(gs1[0, 0])
-ax_heatmap = fig1.add_subplot(gs1[1, 0])
-ax_confidence = fig1.add_subplot(gs1[2, 0])
+# ---- 1. 时间线 ----
+# 动态调整高度以避免纵坐标重叠
+timeline_height = max(10, len(labels_present) * 0.5)
+fig_timeline, ax_timeline = plt.subplots(figsize=(20, timeline_height))
 
-# 时间线
 for label in labels_present:
     subset = df[df['label'] == label]
     ax_timeline.scatter(
@@ -261,22 +258,29 @@ for label in labels_present:
         edgecolors='none'
     )
 
-ax_timeline.set_title("🕐 Sleep Audio Event Timeline", fontsize=14, fontweight='bold')
-ax_timeline.set_xlabel("Time (Hours)")
-ax_timeline.set_ylabel("Sound Category")
+ax_timeline.set_title("Sleep Audio Event Timeline", fontsize=16, fontweight="bold")
+ax_timeline.set_xlabel("Time (Hours)", fontsize=14)
+ax_timeline.set_ylabel("Sound Category", fontsize=14)
 ax_timeline.grid(True, axis='x', linestyle='--', alpha=0.35)
 ax_timeline.set_xlim(0, 8)
 ax_timeline.set_xticks(np.arange(0, 8.01, 0.5))
-# 如果标签过多，缩小图例并换列显示
+ax_timeline.tick_params(axis="both", which="major", labelsize=12)
+
 legend_max = 20
 if len(labels_present) > legend_max:
-    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=8, ncol=2)
+    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=10, ncol=2)
 else:
-    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=9)
+    ax_timeline.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=12)
 
-# 热力图数据准备
-time_bins = np.arange(0, 8.5, 0.5)
+fig_timeline.tight_layout()
+plt.show()
+
+# ---- 2. 热力图 ----
 label_list = sorted(df['label'].unique())
+heatmap_height = max(10, len(label_list) * 0.5)
+fig_heatmap, ax_heatmap = plt.subplots(figsize=(20, heatmap_height))
+
+time_bins = np.arange(0, 8.5, 0.5)
 heatmap_data = np.zeros((len(label_list), len(time_bins) - 1))
 for i, label in enumerate(label_list):
     label_df = df[df['label'] == label]
@@ -284,15 +288,22 @@ for i, label in enumerate(label_list):
 
 im = ax_heatmap.imshow(heatmap_data, aspect='auto', cmap='YlOrRd', interpolation='nearest')
 ax_heatmap.set_xticks(range(len(time_bins) - 1))
-ax_heatmap.set_xticklabels([f"{time_bins[i]:.1f}h" for i in range(len(time_bins) - 1)], fontsize=9)
+ax_heatmap.set_xticklabels(
+    [f"{time_bins[i]:.1f}h" for i in range(len(time_bins) - 1)], fontsize=12
+)
 ax_heatmap.set_yticks(range(len(label_list)))
-ax_heatmap.set_yticklabels(label_list, fontsize=9)
-ax_heatmap.set_title("🔥 Event Density Heatmap (Time vs Category)")
-plt.colorbar(im, ax=ax_heatmap, label="Event Count")
-ax_heatmap.set_xlabel("Time (Hours)")
-ax_heatmap.set_ylabel("Sound Category")
+ax_heatmap.set_yticklabels(label_list, fontsize=12)
+ax_heatmap.set_title("Event Density Heatmap (Time vs Category)", fontsize=16)
+cbar = plt.colorbar(im, ax=ax_heatmap, label="Event Count")
+cbar.ax.tick_params(labelsize=12)
+ax_heatmap.set_xlabel("Time (Hours)", fontsize=14)
+ax_heatmap.set_ylabel("Sound Category", fontsize=14)
 
-# 置信度趋势（目标标签）
+fig_heatmap.tight_layout()
+plt.show()
+
+# ---- 3. 置信度趋势（目标标签） ----
+fig_confidence, ax_confidence = plt.subplots(figsize=(20, 8))
 target_label = "Snoring"
 df_target = df[df['label'] == target_label].copy()
 if not df_target.empty:
@@ -313,49 +324,69 @@ if not df_target.empty:
                            alpha=0.7, label=f'Moving Avg (w={window})')
     ax_confidence.fill_between(df_target['start_hour'], df_target['confidence'], 0,
                                color=color_map.get(target_label, 'orange'), alpha=0.12)
-    ax_confidence.legend(fontsize=9)
+    ax_confidence.legend(fontsize=12)
 
-ax_confidence.set_title(f"📈 {target_label} Confidence Trend")
-ax_confidence.set_xlabel("Time (Hours)")
-ax_confidence.set_ylabel("Confidence")
+ax_confidence.set_title(f"{target_label} Confidence Trend", fontsize=16)
+ax_confidence.set_xlabel("Time (Hours)", fontsize=14)
+ax_confidence.set_ylabel("Confidence", fontsize=14)
 ax_confidence.grid(True, alpha=0.3)
 ax_confidence.set_xlim(0, 8)
 ax_confidence.set_xticks(np.arange(0, 8.01, 0.5))
 ax_confidence.set_ylim(0, 1.05)
+ax_confidence.tick_params(axis="both", which="major", labelsize=12)
 
-fig1.suptitle("🌙 Sleep Audio Overview", fontsize=16, fontweight='bold')
-plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+fig_confidence.tight_layout()
 plt.show()
 
-# ---- 统计面板：频次柱状图、饼图、统计文本纵向排列 ----
-fig2 = plt.figure(figsize=(12, 14))
-gs2 = fig2.add_gridspec(3, 1, hspace=0.38)
-ax_freq = fig2.add_subplot(gs2[0, 0])
-ax_pie = fig2.add_subplot(gs2[1, 0])
-ax_stats = fig2.add_subplot(gs2[2, 0])
-
-# 频次柱状图
+# ---- 4. 频次柱状图 ----
 label_counts = df['label'].value_counts()
-ax_freq.barh(label_counts.index, label_counts.values, color=[color_map.get(label_name, 'gray') for label_name in label_counts.index])
-ax_freq.set_title('📊 Sound Event Frequency')
-ax_freq.set_xlabel('Count')
-ax_freq.grid(axis='x', alpha=0.25)
+freq_height = max(10, len(label_counts) * 0.5)
+fig_freq, ax_freq = plt.subplots(figsize=(20, freq_height))
 
-# 饼图（时间占比）
+ax_freq.barh(label_counts.index, label_counts.values, color=[color_map.get(label_name, 'gray') for label_name in label_counts.index])
+ax_freq.set_title("Sound Event Frequency", fontsize=16)
+ax_freq.set_xlabel("Count", fontsize=14)
+ax_freq.grid(axis='x', alpha=0.25)
+ax_freq.tick_params(axis="both", which="major", labelsize=12)
+
+fig_freq.tight_layout()
+plt.show()
+
+# ---- 5. 饼图（时间占比） ----
+fig_pie, ax_pie = plt.subplots(figsize=(14, 14))
 duration_by_label = (df['end'] - df['start']).groupby(df['label']).sum()
 colors_pie = [color_map.get(label, 'gray') for label in duration_by_label.index]
-ax_pie.pie(duration_by_label.values, labels=list(duration_by_label.index), autopct='%1.1f%%',
-           colors=colors_pie, startangle=90, textprops={'fontsize': 9})
-ax_pie.set_title('🥧 Time Duration Distribution')
+ax_pie.pie(
+    duration_by_label.values,
+    labels=list(duration_by_label.index),
+    autopct="%1.1f%%",
+    colors=colors_pie,
+    startangle=90,
+    textprops={"fontsize": 12},
+)
+ax_pie.set_title("Time Duration Distribution", fontsize=16)
 
-# 统计文本
+fig_pie.tight_layout()
+plt.show()
+
+# ---- 6. 统计文本 ----
+fig_stats, ax_stats = plt.subplots(figsize=(10, 6))
 ax_stats.axis('off')
 stats_text = f"Total Events: {len(df)}\nUnique Labels: {len(labels_present)}\nAvg Confidence: {df['confidence'].mean():.3f}\nMin Conf: {df['confidence'].min():.3f}\nMax Conf: {df['confidence'].max():.3f}"
-ax_stats.text(0.02, 0.98, stats_text, transform=ax_stats.transAxes, fontsize=11, va='top', family='monospace',
-               bbox=dict(boxstyle='round', facecolor='whitesmoke', alpha=0.6))
+ax_stats.text(
+    0.5,
+    0.5,
+    stats_text,
+    transform=ax_stats.transAxes,
+    fontsize=16,
+    va="center",
+    ha="center",
+    family="monospace",
+    bbox=dict(boxstyle="round", facecolor="whitesmoke", alpha=0.8, pad=1),
+)
+ax_stats.set_title("Sleep Audio Statistics", fontsize=18, fontweight="bold")
 
-fig2.suptitle('🧾 Sleep Audio Statistics', fontsize=14, fontweight='bold')
-plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+fig_stats.tight_layout()
 plt.show()
 
 # %% [markdown]
