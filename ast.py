@@ -1,54 +1,5 @@
 # %% [markdown]
-# ## 使用 AST 模型进行音频分类 简单演示
-# %% [code]
-import torch
-import torchaudio
-from transformers import ASTFeatureExtractor, ASTForAudioClassification
-
-# 1. 初始化特征提取器和模型
-# 这里使用 MIT 在 AudioSet 上预训练的权重，它可以分类 527 种声音
-model_id = "MIT/ast-finetuned-audioset-10-10-0.4593"
-feature_extractor = ASTFeatureExtractor.from_pretrained(model_id)
-model = ASTForAudioClassification.from_pretrained(model_id)
-
-# 2. 加载一段测试音频 (假设是一段鼾声或呼吸声)
-# AST 要求的默认采样率通常是 16000 Hz
-audio_path = "/kaggle/input/datasets/tareqkhanemu/snoring/Snoring Dataset/1/1_109.wav"
-waveform, sample_rate = torchaudio.load(audio_path)
-
-# 如果采样率不是 16k，需要重采样
-if sample_rate != 16000:
-    resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-    waveform = resampler(waveform)
-
-# AST 通常期望单声道音频
-if waveform.shape[0] > 1:
-    waveform = torch.mean(waveform, dim=0, keepdim=True)
-
-# 3. 提取特征 (转为梅尔频谱图)
-# 注意：AST 默认输入长度通常是 10.24 秒 (1024 帧)。
-# 如果音频较短，特征提取器会自动 padding；如果较长，你需要先裁剪音频。
-inputs = feature_extractor(waveform.squeeze().numpy(), sampling_rate=16000, return_tensors="pt")
-
-# 4. 模型推理
-with torch.no_grad():
-    outputs = model(**inputs)
-
-# 5. 解析输出结果
-logits = outputs.logits
-predicted_class_idx = torch.argmax(logits, dim=-1).item()
-predicted_class_name = model.config.id2label[predicted_class_idx]
-
-print(f"预测的类别 ID: {predicted_class_idx}")
-print(f"预测的声音类型: {predicted_class_name}")
-
-# 查看 Top 3 预测概率
-probabilities = torch.nn.functional.softmax(logits, dim=-1)[0]
-top3_prob, top3_indices = torch.topk(probabilities, 3)
-
-print("\nTop 3 预测:")
-for prob, idx in zip(top3_prob, top3_indices):
-    print(f"- {model.config.id2label[idx.item()]}: {prob.item():.4f}")
+# ## 使用 AST 模型进行音频分类
 # %% [markdown]
 # ## 转换 M4A 文件为 WAV 格式
 # %% [code] {"execution":{"iopub.status.busy":"2026-05-01T04:26:06.705418Z","iopub.execute_input":"2026-05-01T04:26:06.705663Z","iopub.status.idle":"2026-05-01T04:26:47.725917Z","shell.execute_reply.started":"2026-05-01T04:26:06.705639Z","shell.execute_reply":"2026-05-01T04:26:47.725281Z"}}
@@ -388,35 +339,3 @@ ax_stats.set_title("Sleep Audio Statistics", fontsize=18, fontweight="bold")
 
 fig_stats.tight_layout()
 plt.show()
-
-# %% [markdown]
-# ## 官方使用示例
-
-# %% [code] {"execution":{"iopub.status.busy":"2026-05-01T02:14:17.204083Z","iopub.execute_input":"2026-05-01T02:14:17.204468Z","iopub.status.idle":"2026-05-01T02:14:24.860469Z","shell.execute_reply.started":"2026-05-01T02:14:17.204431Z","shell.execute_reply":"2026-05-01T02:14:24.859799Z"}}
-import torch
-from datasets import load_dataset
-from transformers import ASTForAudioClassification, AutoFeatureExtractor
-
-dataset = load_dataset("hf-internal-testing/librispeech_asr_demo", "clean", split="validation")
-dataset = dataset.sort("id")
-sampling_rate = dataset.features["audio"].sampling_rate
-
-feature_extractor = AutoFeatureExtractor.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-model = ASTForAudioClassification.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-
-# audio file is decoded on the fly
-inputs = feature_extractor(dataset[0]["audio"]["array"], sampling_rate=sampling_rate, return_tensors="pt")
-
-with torch.no_grad():
-    logits = model(**inputs).logits
-
-predicted_class_ids = torch.argmax(logits, dim=-1).item()
-predicted_label = model.config.id2label[predicted_class_ids]
-predicted_label
-
-# %% [code] {"execution":{"iopub.status.busy":"2026-05-01T02:14:14.636063Z","iopub.execute_input":"2026-05-01T02:14:14.636457Z","iopub.status.idle":"2026-05-01T02:14:17.202599Z","shell.execute_reply.started":"2026-05-01T02:14:14.636426Z","shell.execute_reply":"2026-05-01T02:14:17.201713Z"}}
-# compute loss - target_label is e.g. "down"
-target_label = model.config.id2label[0]
-inputs["labels"] = torch.tensor([model.config.label2id[target_label]])
-loss = model(**inputs).loss
-round(loss.item(), 2)
