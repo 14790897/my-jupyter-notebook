@@ -1,7 +1,22 @@
 # %% [markdown]
-# ## 使用 AST 模型进行音频分类
+# ## AST 模型架构 / AST Model Architecture
+# <div align="center">
+#   <img src="https://github.com/YuanGongND/ast/blob/master/ast.png?raw=true" width="400" alt="AST Model Architecture">
+# </div>
+#
+# *上图是 AST (Audio Spectrogram Transformer) 模型的官方架构图。*
+# *The image above is the official architecture diagram for the AST (Audio Spectrogram Transformer) model.*
 # %% [markdown]
-# ## 转换 M4A 文件为 WAV 格式
+# ## 使用 AST 模型进行音频分类 / Audio Classification with AST Model
+# ## 配置路径 / Path Configuration
+# %% [code]
+# ===== 运行配置 =====
+INPUT_FILE = (
+    "/kaggle/input/datasets/liuweiq/my-sleep-voice/2026-05-07_00-13_sleep-father.m4a"
+)
+OUTPUT_FILE = "./2026-04-30-0028-sleep_16k.wav"  # 建议输出到当前工作目录，Kaggle的 /kaggle/input 是只读的
+# %% [markdown]
+# ## 转换 M4A 文件为 WAV 格式 / Convert M4A to WAV Format
 # %% [code] {"execution":{"iopub.status.busy":"2026-05-01T04:26:06.705418Z","iopub.execute_input":"2026-05-01T04:26:06.705663Z","iopub.status.idle":"2026-05-01T04:26:47.725917Z","shell.execute_reply.started":"2026-05-01T04:26:06.705639Z","shell.execute_reply":"2026-05-01T04:26:47.725281Z"}}
 import os
 import subprocess
@@ -59,14 +74,12 @@ def convert_m4a_to_wav(input_path, output_path, sample_rate=16000, channels=1):
         print(e.stderr)
         return False
 
-# ===== 运行配置 =====
-INPUT_FILE = "/kaggle/input/datasets/liuweiq/my-sleep-voice/2026-05-02-0.15-sleep.m4a"
-OUTPUT_FILE = "./2026-04-30-0028-sleep_16k.wav"  # 建议输出到当前工作目录，Kaggle的 /kaggle/input 是只读的
+
 
 # 执行转换
 convert_m4a_to_wav(INPUT_FILE, OUTPUT_FILE)
 # %% [markdown]
-# ## 加载睡眠音频，正式评估打鼾
+# ## 加载睡眠音频，正式评估打鼾 / Load Sleep Audio and Evaluate Snoring
 # %% [code]
 import numpy as np
 import torch
@@ -166,7 +179,10 @@ for i in tqdm(range(0, len(chunks), BATCH_SIZE)):
 print("✅ 处理完成！")
 # 你可以进一步将 results 写入 JSON 或 CSV 进行可视化分析
 
-# %% [code] {"execution":{"iopub.status.busy":"2026-05-01T02:23:20.701116Z","iopub.execute_input":"2026-05-01T02:23:20.701545Z","iopub.status.idle":"2026-05-01T02:23:21.096545Z","shell.execute_reply.started":"2026-05-01T02:23:20.701511Z","shell.execute_reply":"2026-05-01T02:23:21.095461Z"}}
+# %% [markdown]
+# ## 结果可视化 / Result Visualization
+# ### 数据准备 / Data Preparation
+# %% [code]
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -190,8 +206,10 @@ important_colors = {
     "Wheeze": "#9467bd"
 }
 color_map.update(important_colors)
-# ===== 2. 单独绘制每个图表，按最大化方式展示 =====
 
+# %% [markdown]
+# ### 1. 睡眠音频事件时间线 / 1. Sleep Audio Event Timeline
+# %% [code]
 # ---- 1. 时间线 ----
 # 动态调整高度以避免纵坐标重叠
 timeline_height = max(10, len(labels_present) * 0.5)
@@ -226,6 +244,9 @@ else:
 fig_timeline.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### 2. 事件密度热力图 / 2. Event Density Heatmap
+# %% [code]
 # ---- 2. 热力图 ----
 label_list = sorted(df['label'].unique())
 heatmap_height = max(10, len(label_list) * 0.5)
@@ -253,6 +274,9 @@ ax_heatmap.set_ylabel("Sound Category", fontsize=14)
 fig_heatmap.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### 3. 置信度趋势 (打鼾) / 3. Confidence Trend (Snoring)
+# %% [code]
 # ---- 3. 置信度趋势（目标标签） ----
 fig_confidence, ax_confidence = plt.subplots(figsize=(20, 8))
 target_label = "Snoring"
@@ -289,6 +313,9 @@ ax_confidence.tick_params(axis="both", which="major", labelsize=12)
 fig_confidence.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### 4. 声音事件频次 / 4. Sound Event Frequency
+# %% [code]
 # ---- 4. 频次柱状图 ----
 label_counts = df['label'].value_counts()
 freq_height = max(10, len(label_counts) * 0.5)
@@ -303,6 +330,9 @@ ax_freq.tick_params(axis="both", which="major", labelsize=12)
 fig_freq.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### 5. 各事件时间占比 / 5. Time Duration Distribution by Event
+# %% [code]
 # ---- 5. 饼图（时间占比） ----
 fig_pie, ax_pie = plt.subplots(figsize=(14, 14))
 duration_by_label = (df['end'] - df['start']).groupby(df['label']).sum()
@@ -320,10 +350,17 @@ ax_pie.set_title("Time Duration Distribution", fontsize=16)
 fig_pie.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### 6. 核心统计数据 / 6. Core Statistics
+# %% [code]
 # ---- 6. 统计文本 ----
 fig_stats, ax_stats = plt.subplots(figsize=(10, 6))
 ax_stats.axis('off')
-stats_text = f"Total Events: {len(df)}\nUnique Labels: {len(labels_present)}\nAvg Confidence: {df['confidence'].mean():.3f}\nMin Conf: {df['confidence'].min():.3f}\nMax Conf: {df['confidence'].max():.3f}"
+stats_text = f"Total Events: {len(df)}
+Unique Labels: {len(labels_present)}
+Avg Confidence: {df['confidence'].mean():.3f}
+Min Conf: {df['confidence'].min():.3f}
+Max Conf: {df['confidence'].max():.3f}"
 ax_stats.text(
     0.5,
     0.5,
@@ -339,3 +376,48 @@ ax_stats.set_title("Sleep Audio Statistics", fontsize=18, fontweight="bold")
 
 fig_stats.tight_layout()
 plt.show()
+
+# %% [markdown]
+# ## 提取并展示打鼾音频片段 / Extract and Display Snoring Audio Clips
+# %% [code]
+from IPython.display import Audio, display
+import datetime
+
+snoring_events = df[df["label"] == "Snoring"].copy()
+if snoring_events.empty:
+    print("没有检测到打鼾 (Snoring) 事件。")
+else:
+    # 取置信度最高的前 10 次鼾声，按时间线排序展示，避免输出过多卡顿
+    print(
+        f"共检测到 {len(snoring_events)} 次打鼾事件。以下展示置信度最高的前 10 次片段："
+    )
+    top_snoring = (
+        snoring_events.sort_values(by="confidence", ascending=False)
+        .head(10)
+        .sort_values(by="start")
+    )
+
+    try:
+        for idx, row in top_snoring.iterrows():
+            start_t = row["start"]
+            end_t = row["end"]
+            conf = row["confidence"]
+
+            # 格式化时间 hh:mm:ss
+            start_str = str(datetime.timedelta(seconds=int(start_t)))
+            end_str = str(datetime.timedelta(seconds=int(end_t)))
+
+            print("-" * 40)
+            print(
+                f"时间段: {start_str} - {end_str} (秒数: {start_t:.2f}s -> {end_t:.2f}s) | 置信度: {conf:.4f}"
+            )
+
+            # 根据起止时间截取相应的音频特征序列
+            start_sample = int(start_t * SAMPLE_RATE)
+            end_sample = int(end_t * SAMPLE_RATE)
+            audio_segment = waveform[start_sample:end_sample]
+
+            # 使用 IPython 的 Audio 组件，实现在 Notebook 界面直接播放
+            display(Audio(audio_segment, rate=SAMPLE_RATE))
+    except Exception as e:
+        print(f"展示音频失败，错误: {e}")
