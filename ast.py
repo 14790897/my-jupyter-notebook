@@ -383,8 +383,9 @@ plt.show()
 # %% [markdown]
 # ## 提取并展示打鼾音频片段 / Extract and Display Snoring Audio Clips
 # %% [code]
-from IPython.display import Audio, display
 import datetime
+
+from IPython.display import Audio, display
 
 snoring_events = df[df["label"] == "Snoring"].copy()
 if snoring_events.empty:
