@@ -356,11 +356,14 @@ plt.show()
 # ---- 6. 统计文本 ----
 fig_stats, ax_stats = plt.subplots(figsize=(10, 6))
 ax_stats.axis('off')
-stats_text = f"Total Events: {len(df)}
-Unique Labels: {len(labels_present)}
-Avg Confidence: {df['confidence'].mean():.3f}
-Min Conf: {df['confidence'].min():.3f}
-Max Conf: {df['confidence'].max():.3f}"
+# Use explicit newlines to build the stats string safely
+stats_text = (
+    f"Total Events: {len(df)}\n"
+    f"Unique Labels: {len(labels_present)}\n"
+    f"Avg Confidence: {df['confidence'].mean():.3f}\n"
+    f"Min Conf: {df['confidence'].min():.3f}\n"
+    f"Max Conf: {df['confidence'].max():.3f}"
+)
 ax_stats.text(
     0.5,
     0.5,
