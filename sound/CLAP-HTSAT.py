@@ -1,10 +1,14 @@
 # %% [markdown]
 # ## CLAP-HTSAT 睡眠音频打鼾检测 / Snoring Detection with CLAP-HTSAT
+# %% [markdown]
+# ## 架构图 / Architecture Diagram
+# <img src="https://raw.githubusercontent.com/LAION-AI/CLAP/main/assets/audioclip-arch.png" width="50%">
+# %% [markdown]
 # ## 配置路径 / Path Configuration
 # %% [code]
 # ===== 运行配置 =====
 INPUT_FILE = (
-    "/kaggle/input/datasets/liuweiq/my-sleep-voice/2026-05-07_00-13_sleep-father.m4a"
+    "/kaggle/input/datasets/liuweiq/my-sleep-voice/2026-05-09_00-15_me_sleep.m4a"
 )
 OUTPUT_FILE = "./2026-05-09_sleep_16k.wav"
 
