@@ -37,22 +37,33 @@ BATCH_SIZE     = 8
 import os
 import subprocess
 
+
 def convert_m4a_to_wav(input_path, output_path, sample_rate=16000, channels=1):
     if not os.path.exists(input_path):
         print(f"❌ 找不到输入文件: {input_path}")
         return False
     print(f"正在转换...\n输入: {input_path}\n输出: {output_path}")
     command = [
-        "ffmpeg", "-y",
-        "-i", input_path,
-        "-ac", str(channels),
-        "-ar", str(sample_rate),
-        "-acodec", "pcm_s16le",
-        output_path
+        "ffmpeg",
+        "-y",
+        "-i",
+        input_path,
+        "-ac",
+        str(channels),
+        "-ar",
+        str(sample_rate),
+        "-acodec",
+        "pcm_s16le",
+        output_path,
     ]
     try:
-        subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                     text=True, check=True)
+        subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
         print("✅ 转换成功！")
         if os.path.exists(output_path):
             mb = os.path.getsize(output_path) / (1024 * 1024)
@@ -62,6 +73,7 @@ def convert_m4a_to_wav(input_path, output_path, sample_rate=16000, channels=1):
         print("❌ 转换失败！")
         print(e.stderr)
         return False
+
 
 convert_m4a_to_wav(INPUT_FILE, OUTPUT_FILE)
 
@@ -88,29 +100,31 @@ print(f"候选标签: {CANDIDATE_LABELS}")
 # %% [markdown]
 # ## 加载音频并推理 / Load Audio and Run Inference
 # %% [code]
-import torchaudio
 import numpy as np
+import torchaudio
 
 print("正在加载音频...")
 waveform, sr = torchaudio.load(OUTPUT_FILE)
 
 # 重采样并转单声道
 if sr != SAMPLE_RATE:
-    waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=SAMPLE_RATE)
+    waveform = torchaudio.functional.resample(
+        waveform, orig_freq=sr, new_freq=SAMPLE_RATE
+    )
 if waveform.shape[0] > 1:
     waveform = torch.mean(waveform, dim=0, keepdim=True)
 
 waveform_np = waveform.squeeze().numpy()
-total_samples  = len(waveform_np)
+total_samples = len(waveform_np)
 total_duration = total_samples / SAMPLE_RATE
 print(f"音频加载完成: 总时长 {total_duration/3600:.2f} 小时")
 
 # 生成滑窗切片
-chunk_samples  = int(CHUNK_DURATION  * SAMPLE_RATE)
+chunk_samples = int(CHUNK_DURATION * SAMPLE_RATE)
 stride_samples = int(STRIDE_DURATION * SAMPLE_RATE)
 
-chunks      = []
-timestamps  = []
+chunks = []
+timestamps = []
 
 for start_idx in range(0, max(1, total_samples - chunk_samples + 1), stride_samples):
     end_idx = start_idx + chunk_samples
@@ -127,22 +141,26 @@ results = []
 print("开始推理...")
 
 for i in tqdm(range(0, len(chunks), BATCH_SIZE)):
-    batch_chunks     = chunks[i:i + BATCH_SIZE]
-    batch_timestamps = timestamps[i:i + BATCH_SIZE]
+    batch_chunks = chunks[i : i + BATCH_SIZE]
+    batch_timestamps = timestamps[i : i + BATCH_SIZE]
 
-    for j, (audio_chunk, (start_t, end_t)) in enumerate(zip(batch_chunks, batch_timestamps)):
+    for j, (audio_chunk, (start_t, end_t)) in enumerate(
+        zip(batch_chunks, batch_timestamps)
+    ):
         # CLAP zero-shot: 传入音频数组 + 候选标签列表
         output = audio_classifier(audio_chunk, candidate_labels=CANDIDATE_LABELS)
 
         # output 是 list[dict], 每个 dict 含 label / score
         # 取 top-1
         top = output[0]
-        results.append({
-            "start":      round(start_t, 2),
-            "end":        round(end_t, 2),
-            "label":      top["label"],
-            "confidence": round(top["score"], 4),
-        })
+        results.append(
+            {
+                "start": round(start_t, 2),
+                "end": round(end_t, 2),
+                "label": top["label"],
+                "confidence": round(top["score"], 4),
+            }
+        )
 
 print(f"✅ 处理完成！共 {len(results)} 条结果。")
 
@@ -156,20 +174,20 @@ import pandas as pd
 
 df = pd.DataFrame(results)
 df["start_hour"] = df["start"] / 3600.0
-df["end_hour"]   = df["end"]   / 3600.0
+df["end_hour"] = df["end"] / 3600.0
 
 labels_present = df["label"].unique()
-colors   = cm.get_cmap("tab20", len(labels_present))
+colors = cm.get_cmap("tab20", len(labels_present))
 color_map = {label: colors(i) for i, label in enumerate(labels_present)}
 
 # 关键标签固定颜色
 important_colors = {
-    "Silence":   "lightgray",
-    "Breathing":  "#2ca02c",
-    "Snoring":   "#ff7f0e",
-    "Gasp":      "#d62728",
-    "Wheezing":  "#9467bd",
-    "Cough":     "#1f77b4",
+    "Silence": "lightgray",
+    "Breathing": "#2ca02c",
+    "Snoring": "#ff7f0e",
+    "Gasp": "#d62728",
+    "Wheezing": "#9467bd",
+    "Cough": "#1f77b4",
 }
 for k, v in important_colors.items():
     if k in color_map:
@@ -211,10 +229,10 @@ plt.show()
 # %% [markdown]
 # ### 2. 事件密度热力图 / Event Density Heatmap
 # %% [code]
-label_list   = sorted(df["label"].unique())
+label_list = sorted(df["label"].unique())
 heatmap_height = max(10, len(label_list) * 0.5)
 fig_hm, ax_hm = plt.subplots(figsize=(20, heatmap_height))
-time_bins   = np.arange(0, 8.5, 0.5)
+time_bins = np.arange(0, 8.5, 0.5)
 heatmap_data = np.zeros((len(label_list), len(time_bins) - 1))
 for i, label in enumerate(label_list):
     label_df = df[df["label"] == label]
@@ -222,7 +240,9 @@ for i, label in enumerate(label_list):
 
 im = ax_hm.imshow(heatmap_data, aspect="auto", cmap="YlOrRd", interpolation="nearest")
 ax_hm.set_xticks(range(len(time_bins) - 1))
-ax_hm.set_xticklabels([f"{time_bins[i]:.1f}h" for i in range(len(time_bins) - 1)], fontsize=12)
+ax_hm.set_xticklabels(
+    [f"{time_bins[i]:.1f}h" for i in range(len(time_bins) - 1)], fontsize=12
+)
 ax_hm.set_yticks(range(len(label_list)))
 ax_hm.set_yticklabels(label_list, fontsize=12)
 ax_hm.set_title("Event Density Heatmap (Time vs Category)", fontsize=16)
@@ -242,23 +262,43 @@ df_target = df[df["label"] == target_label].copy()
 
 if not df_target.empty:
     df_target = df_target.sort_values("start").set_index("start")
-    full_sec = np.arange(df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION)
+    full_sec = np.arange(
+        df_target.index.min(), df_target.index.max() + STRIDE_DURATION, STRIDE_DURATION
+    )
     df_target = df_target.reindex(full_sec)
     df_target["confidence"] = df_target["confidence"].fillna(0)
     df_target = df_target.reset_index().rename(columns={"index": "start"})
     df_target["start_hour"] = df_target["start"] / 3600.0
 
-    ax_cf.plot(df_target["start_hour"], df_target["confidence"],
-                color=color_map.get(target_label, "orange"), marker=".", linestyle="-",
-                linewidth=2, alpha=0.9, label="Original")
+    ax_cf.plot(
+        df_target["start_hour"],
+        df_target["confidence"],
+        color=color_map.get(target_label, "orange"),
+        marker=".",
+        linestyle="-",
+        linewidth=2,
+        alpha=0.9,
+        label="Original",
+    )
     if len(df_target) > 3:
         window = min(7, max(3, len(df_target) // 3))
         moving_avg = df_target["confidence"].rolling(window=window, center=True).mean()
-        ax_cf.plot(df_target["start_hour"], moving_avg,
-                    color="red", linestyle="--", linewidth=2, alpha=0.7,
-                    label=f"Moving Avg (w={window})")
-    ax_cf.fill_between(df_target["start_hour"], df_target["confidence"], 0,
-                         color=color_map.get(target_label, "orange"), alpha=0.12)
+        ax_cf.plot(
+            df_target["start_hour"],
+            moving_avg,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            alpha=0.7,
+            label=f"Moving Avg (w={window})",
+        )
+    ax_cf.fill_between(
+        df_target["start_hour"],
+        df_target["confidence"],
+        0,
+        color=color_map.get(target_label, "orange"),
+        alpha=0.12,
+    )
     ax_cf.legend(fontsize=12)
 
 ax_cf.set_title(f"{target_label} Confidence Trend", fontsize=16)
@@ -275,13 +315,13 @@ plt.show()
 # %% [markdown]
 # ### 4. 声音事件频次 / Sound Event Frequency
 # %% [code]
-label_counts  = df["label"].value_counts()
+label_counts = df["label"].value_counts()
 freq_height = max(10, len(label_counts) * 0.5)
 fig_fr, ax_fr = plt.subplots(figsize=(20, freq_height))
 ax_fr.barh(
     label_counts.index,
     label_counts.values,
-    color=[color_map.get(lbl, "gray") for lbl in label_counts.index]
+    color=[color_map.get(lbl, "gray") for lbl in label_counts.index],
 )
 ax_fr.set_title("Sound Event Frequency", fontsize=16)
 ax_fr.set_xlabel("Count", fontsize=14)
@@ -321,9 +361,13 @@ stats_text = (
     f"Max Conf:       {df['confidence'].max():.3f}"
 )
 ax_st.text(
-    0.5, 0.5, stats_text,
+    0.5,
+    0.5,
+    stats_text,
     transform=ax_st.transAxes,
-    fontsize=16, va="center", ha="center",
+    fontsize=16,
+    va="center",
+    ha="center",
     family="monospace",
     bbox=dict(boxstyle="round", facecolor="whitesmoke", alpha=0.8, pad=1),
 )
@@ -335,6 +379,7 @@ plt.show()
 # ## 提取并播放打鼾片段 / Play Snoring Audio Clips
 # %% [code]
 import datetime
+
 from IPython.display import Audio, display
 
 snoring_events = df[df["label"] == "Snoring"].copy()
