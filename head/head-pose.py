@@ -122,7 +122,7 @@ while True:
 
                 # 显示角度数值
                 angle_text = f"yaw:{yaw:.1f} pitch:{pitch:.1f} roll:{roll:.1f}"
-                cv2.putText(annotated, angle_text, (x1, y1 - 10),
+                cv2.putText(annotated, angle_text, (x1, y1 - 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
     # ---- 睡姿变化检测 ----
