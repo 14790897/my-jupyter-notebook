@@ -120,10 +120,10 @@ while True:
                 # 画人脸框（可选，注释掉以移除）
                 # cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-                # 显示角度数值
-                angle_text = f"yaw:{yaw:.1f} pitch:{pitch:.1f} roll:{roll:.1f}"
-                cv2.putText(annotated, angle_text, (x1, y1 - 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                # 显示角度数值，这个没必要，因为默认它就会自己画上去
+                # angle_text = f"yaw:{yaw:.1f} pitch:{pitch:.1f} roll:{roll:.1f}"
+                # cv2.putText(annotated, angle_text, (x1, y1 - 30),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
     # ---- 睡姿变化检测 ----
     if prev_posture is not None and posture_label != "Unknown" and posture_label != prev_posture:
@@ -142,15 +142,14 @@ while True:
     # 睡姿标签（左上角）
     color = (0, 255, 0) if posture_label == "Supine" else (0, 0, 255) if posture_label == "Side" else (128, 128, 128)
     label_text = f"Posture: {posture_label}"
-    cv2.putText(annotated, label_text, (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
+    # cv2.putText(annotated, label_text, (20, 40),cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
 
-    # 睡姿改变闪烁提示
-    if posture_changed:
-        # 每隔 5 帧闪烁红色警告
-        if (change_display_counter // 5) % 2 == 0:
-            cv2.putText(annotated, "*** Posture Changed ***", (20, 90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+    # # 睡姿改变闪烁提示
+    # if posture_changed:
+    #     # 每隔 5 帧闪烁红色警告
+    #     if (change_display_counter // 5) % 2 == 0:
+    #         cv2.putText(annotated, "*** Posture Changed ***", (20, 90),
+    #                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
 
     # 帧号 & 时间戳
     timestamp = frame_idx / fps
