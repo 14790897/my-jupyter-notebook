@@ -51,25 +51,37 @@ frame_area = w * h
 
 print(f"Video info: {w}x{h}, {fps:.1f} FPS, total {total_frames} frames")
 
-# 使用 ffmpeg 管道写入视频（比 cv2.VideoWriter 更稳定，支持 H.264）
+# 使用 ffmpeg 管道写入视频（保留原始音频）
+# 输入1：从 stdin 读取处理后的视频帧
+# 输入2：从原始视频读取音频流
 command = [
     "ffmpeg",
     "-y",                      # 覆盖已存在文件
     "-loglevel", "error",      # 只输出错误信息
+    # 输入1：视频帧（从 stdin）
     "-f", "rawvideo",
     "-vcodec", "rawvideo",
     "-s", f"{w}x{h}",
     "-pix_fmt", "bgr24",
     "-r", str(fps),
     "-i", "-",                 # 从 stdin 读取帧数据
+    # 输入2：原始视频（用于提取音频）
+    "-i", INPUT_VIDEO,
+    # 视频编码
     "-c:v", "libx264",
     "-pix_fmt", "yuv420p",
     "-crf", "18",
     "-preset", "fast",
+    # 音频编码（复制原始音频流）
+    "-c:a", "copy",
+    # 映射：使用输入1的视频 + 输入2的音频
+    "-map", "0:v",
+    "-map", "1:a",
     OUTPUT_VIDEO,
 ]
 proc = subprocess.Popen(command, stdin=subprocess.PIPE)
 print(f"Output video (ffmpeg): {OUTPUT_VIDEO}")
+print("Audio will be copied from original video.")
 
 # %% [code]
 # 状态变量
