@@ -1,14 +1,11 @@
 # %% [markdown]
 # # Sleep Posture Detection from Video (Side-View Overhead Camera)
-#
 # **场景**：摄像头安装在人体右侧，俯视拍摄（右侧俯视）。
 # 目标：逐帧分析头部姿态，判断是否为侧睡，并检测睡姿变化。
-#
 # **判定逻辑**：
 # - `|roll| < 30°` → 仰睡（平躺）
 # - `|roll| ≥ 30°` → 侧睡
 # - 连续帧之间睡姿状态发生变化 → 标记为「睡姿改变」并记录时间戳
-#
 # 输出：带标注的视频文件（睡姿标签 + 变化提示）
 
 # %% [code]
@@ -120,8 +117,8 @@ while True:
                 else:
                     posture_label = "Side"
 
-                # 画人脸框
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                # 画人脸框（可选，注释掉以移除）
+                # cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
                 # 显示角度数值
                 angle_text = f"yaw:{yaw:.1f} pitch:{pitch:.1f} roll:{roll:.1f}"
