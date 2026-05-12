@@ -29,7 +29,7 @@ print(f"UniFace version: {uniface.__version__}")
 
 # %% [code]
 # ========== Config ==========
-INPUT_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang.mp4"
+INPUT_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 OUTPUT_VIDEO = "output_mosaic.mp4"
 MODE = "mosaic"          # "mosaic" or "blur"
 MOSAIC_BLOCK = 15        # mosaic block size (pixels), smaller = heavier mosaic
@@ -129,37 +129,47 @@ while True:
     faces = detector.detect(frame)
     face_count = 0
 
-    if len(faces) > 0:
-        # Process the largest face (closest to camera)
-        faces_sorted = sorted(
-            faces,
-            key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
-            reverse=True,
+    # Process ALL detected faces
+    all_masks = []
+    # Sort by bbox area (largest first)
+    faces_sorted = sorted(
+        faces,
+        key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
+        reverse=True,
+    )
+
+    for face in faces_sorted:
+        if face.landmarks is None:
+            continue
+        face_count += 1
+
+        # XSeg requires landmarks for alignment
+        mask = xseg.parse(frame, landmarks=face.landmarks)
+
+        # Ensure mask is same size as frame
+        if mask.shape[0] != h or mask.shape[1] != w:
+            mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_LINEAR)
+
+        all_masks.append(mask)
+
+    if len(all_masks) > 0:
+        # Merge all face masks (union)
+        merged_mask = np.max(np.stack(all_masks, axis=0), axis=0)
+
+        # Apply face anonymization to all faces at once
+        annotated = apply_face_mask(
+            annotated,
+            merged_mask,
+            mode=MODE,
+            block_size=MOSAIC_BLOCK,
+            blur_kernel=BLUR_KERNEL,
         )
-        face = faces_sorted[0]
 
-        if face.landmarks is not None:
-            # XSeg requires landmarks for alignment
-            mask = xseg.parse(frame, landmarks=face.landmarks)
-
-            # Ensure mask is same size as frame
-            if mask.shape[0] != h or mask.shape[1] != w:
-                mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_LINEAR)
-
-            # Apply face anonymization
-            annotated = apply_face_mask(
-                annotated,
-                mask,
-                mode=MODE,
-                block_size=MOSAIC_BLOCK,
-                blur_kernel=BLUR_KERNEL,
-            )
-            face_count = 1
-
-            # Draw green contour of face mask (optional visualization)
-            mask_u8 = (mask * 255).astype(np.uint8)
-            contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(annotated, contours, -1, (0, 255, 0), 2)
+        # Draw green contour for each face mask
+        # for m in all_masks:
+        #     mask_u8 = (m * 255).astype(np.uint8)
+        #     contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        #     cv2.drawContours(annotated, contours, -1, (0, 255, 0), 2)
 
     # Overlay text
     mode_label = "Mosaic" if MODE == "mosaic" else "Blur"
