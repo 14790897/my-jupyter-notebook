@@ -1,13 +1,15 @@
 # %% [markdown]
-# # Face Mosaic / Blur for Video
+# # Face Mosaic / Blur / Faceless for Video
 #
 # Uses **UniFace XSeg** to segment face regions in each frame,
-# then applies mosaic or blur to anonymize faces.
+# then applies mosaic, blur, or "faceless" effect to anonymize faces.
 # Audio is preserved from the original video via ffmpeg.
 #
-# **Two processing modes**:
-# - `MODE = "mosaic"` — pixelated face
-# - `MODE = "blur"`   — Gaussian blur on face region
+# **Processing modes**:
+# - `MODE = "mosaic"`   — pixelated face (adjustable block size)
+# - `MODE = "blur"`     — Gaussian blur on face region
+# - `MODE = "faceless"` — extreme mosaic (block=5) + heavy blur, face completely unrecognizable
+# - `MODE = "black"`    — fill face region with black (total obscuration)
 #
 # Output: `output_mosaic.mp4` with original audio.
 #
@@ -31,10 +33,10 @@ print(f"UniFace version: {uniface.__version__}")
 # ========== Config ==========
 INPUT_VIDEO = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 OUTPUT_VIDEO = "output_mosaic.mp4"
-MODE = "mosaic"          # "mosaic" or "blur"
-MOSAIC_BLOCK = 15        # mosaic block size (pixels), smaller = heavier mosaic
-BLUR_KERNEL = (99, 99) # Gaussian blur kernel size (must be odd)
-CONF_THRESH = 0.5        # face detection confidence threshold
+MODE = "faceless"       # "mosaic" | "blur" | "faceless" | "black"
+MOSAIC_BLOCK = 5         # mosaic block size (pixels), smaller = heavier mosaic
+BLUR_KERNEL = (199, 199) # Gaussian blur kernel size (must be odd, used by "blur" and "faceless")
+CONF_THRESH = 0.5         # face detection confidence threshold
 # =============================
 
 # Initialize models
@@ -100,7 +102,7 @@ def apply_mosaic(region, block_size=15):
 
 
 def apply_face_mask(frame, mask, mode="mosaic", block_size=15, blur_kernel=(99, 99)):
-    """Apply mosaic or blur to face region defined by mask.
+    """Apply mosaic / blur / faceless / black to face region defined by mask.
 
     mask: [0, 1] float, same HxW as frame
     """
@@ -110,9 +112,27 @@ def apply_face_mask(frame, mask, mode="mosaic", block_size=15, blur_kernel=(99, 
     if mode == "mosaic":
         mosaic_region = apply_mosaic(frame, block_size).astype(np.float32)
         result = frame_f * (1 - mask_3ch) + mosaic_region * mask_3ch
-    else:  # blur
+
+    elif mode == "blur":
         blurred = cv2.GaussianBlur(frame, blur_kernel, 0).astype(np.float32)
         result = frame_f * (1 - mask_3ch) + blurred * mask_3ch
+
+    elif mode == "faceless":
+        # Step 1: extreme mosaic (tiny blocks) -> face becomes unrecognizable color blocks
+        extreme_mosaic = apply_mosaic(frame, block_size=3).astype(np.float32)
+        # Step 2: heavy blur on top of mosaic to further destroy features
+        faceless = cv2.GaussianBlur(
+            extreme_mosaic.astype(np.uint8), blur_kernel, 0
+        ).astype(np.float32)
+        result = frame_f * (1 - mask_3ch) + faceless * mask_3ch
+
+    elif mode == "black":
+        # Fill face region with black (total obscuration)
+        black_region = np.zeros_like(frame, dtype=np.float32)
+        result = frame_f * (1 - mask_3ch) + black_region * mask_3ch
+
+    else:
+        result = frame_f
 
     return result.clip(0, 255).astype(np.uint8)
 
@@ -172,7 +192,13 @@ while True:
         #     cv2.drawContours(annotated, contours, -1, (0, 255, 0), 2)
 
     # Overlay text
-    mode_label = "Mosaic" if MODE == "mosaic" else "Blur"
+    mode_labels = {
+        "mosaic": "Mosaic",
+        "blur": "Blur",
+        "faceless": "Faceless",
+        "black": "Black",
+    }
+    mode_label = mode_labels.get(MODE, MODE)
     cv2.putText(annotated, f"Face {mode_label}", (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
     cv2.putText(annotated, f"Face count: {face_count}", (20, 80),
