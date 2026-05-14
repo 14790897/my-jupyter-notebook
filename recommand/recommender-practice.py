@@ -123,6 +123,9 @@ print(f"Recommendations generated for {top_k_recs['userID'].nunique()} users")
 print("\nSample recommendations (first 20 rows):")
 display(top_k_recs.head(20))
 
+# Add rank column for each user's recommendations
+top_k_recs['rank'] = top_k_recs.groupby('userID').cumcount() + 1
+
 # %% [markdown]
 # ## 五、推荐结果可视化
 
@@ -265,7 +268,9 @@ def get_recommendations_for_user(user_id, model, train_data, top_k=10):
     })
 
     recs = model.recommend_k_items(test_input, top_k=top_k, remove_seen=True)
-    return recs[recs["userID"] == user_id].sort_values("rank")
+    user_recs = recs[recs["userID"] == user_id].copy()
+    user_recs['rank'] = range(1, len(user_recs) + 1)
+    return user_recs.sort_values("rank")
 
 
 target_user = train_df["userID"].iloc[0]
