@@ -88,12 +88,12 @@ personal_ratings = [
     (6350,   5),  # Laputa: Castle in the Sky (1986)
     (81564,  4),  # Megamind (2010)
     (1203,   4),  # 12 Angry Men (1957)
-    (1291,   4),  # Spirited Away (2001)
-    (152081, 4),  # Zootopia (2016)
+    (5618,   4),  # Spirited Away (2001)
     (920,    4),  # Gone with the Wind (1939)
     (97938,  4),  # Life of Pi (2012)
     (7099,   3),  # Nausicaä of the Valley of the Wind (1984)
     (318,    3),  # The Shawshank Redemption (1994)
+    (73881,  4),  # 3 Idiots (2009)
 ]
 
 # 新用户ID（原数据集中最大用户ID + 10）
