@@ -48,10 +48,11 @@ print(f"TensorFlow: {tf.__version__}")
 # %% [code]
 # 设置参数
 TOP_K = 20  # 修改：与YAML配置一致
-MOVIELENS_DATA_SIZE = '100k'
-EPOCHS = 1000  # 修改：与YAML配置一致
+MOVIELENS_DATA_SIZE = '20m'
+EPOCHS = 10  # 修改：与YAML配置一致
 BATCH_SIZE = 4096
 SEED = DEFAULT_SEED
+DATASET_PATH = '/kaggle/input/datasets/organizations/grouplens/movielens-20m-dataset/'
 
 print(f"Top-K: {TOP_K}")
 print(f"Dataset: MovieLens {MOVIELENS_DATA_SIZE}")
@@ -116,7 +117,7 @@ hparams.batch_size = BATCH_SIZE
 hparams.decay = 0.0001
 hparams.epochs = EPOCHS
 hparams.learning_rate = 0.001
-hparams.eval_epoch = -1  # -1表示训练期间不评估
+hparams.eval_epoch = 10  # -1表示训练期间不评估
 hparams.top_k = TOP_K
 
 # info组参数（按照YAML配置）
@@ -144,6 +145,28 @@ topk_scores = model.recommend_k_items(test, top_k=TOP_K, remove_seen=True)
 print("推荐完成！")
 print("推荐结果预览:")
 display(topk_scores.head())
+# %% [code]
+# 1. 指定你要推荐的用户 ID（换成你数据里真实存在的用户ID）
+target_user_id = 123  # 改成你想推的用户ID
+
+# 2. 构造只包含这个用户的测试数据
+import pandas as pd
+test_single_user = pd.DataFrame({
+    "userID": [target_user_id],
+    "itemID": [0]  # 随便填一个，模型不会用，只是格式需要
+})
+
+# 3. 给这个用户单独推荐
+TOP_K = 10
+recommendations = model.recommend_k_items(
+    test_single_user, 
+    top_k=TOP_K, 
+    remove_seen=True
+)
+
+# 4. 输出结果
+print("给用户", target_user_id, "推荐的 TOP-10 物品：")
+print(recommendations)
 
 # %% [code]
 # 评估模型性能
@@ -168,15 +191,19 @@ print(f"Recall@K:\t{eval_recall:.6f}")
 # 加载电影信息（用于展示电影名称）
 print("加载电影信息...")
 
-movies_df = movielens.load_pandas_df(
-    size='100k',
-    header=['itemID', 'title', 'release_date', 'video_release_date', 'IMDb_URL',
-           'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy',
-           'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror',
-           'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
-)
+movies_path = os.path.join(DATASET_PATH, 'movie.csv')
+movies_df = pd.read_csv(movies_path)
+
+# 重命名列以匹配后续代码
+movies_df = movies_df.rename(columns={
+    'movieId': 'itemID',
+    'title': 'title',
+    'genres': 'genres'
+})
 
 print(f"电影信息加载成功！形状: {movies_df.shape}")
+print("电影信息预览:")
+display(movies_df.head())
 
 # %% [code]
 # 展示某个用户的推荐结果
