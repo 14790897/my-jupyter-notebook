@@ -15,375 +15,217 @@
 # - 经典的推荐系统基准数据集
 
 # %% [code]
-# 安装依赖
+# 安装依赖（Kaggle环境已预装pandas, numpy等基础库）
 %pip install -q "recommenders>=0.7.0"
-%pip install -q pandas numpy scipy scikit-learn
-%pip install -q torch torchvision
 
 # %% [code]
 # 导入必要的库
 import sys
+import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from IPython.display import display
+import tensorflow as tf
+tf.get_logger().setLevel('ERROR')  # 只显示错误信息
 
+from recommenders.utils.timer import Timer
+from recommenders.models.deeprec.models.graphrec.lightgcn import LightGCN
+from recommenders.models.deeprec.DataModel.ImplicitCF import ImplicitCF
 from recommenders.datasets import movielens
-from recommenders.datasets.python_splitters import python_random_split
-from recommenders.models.lightgcn.lightgcn_utils import (
-    prepare_data,
-    construct_adj_matrix,
-    get_batched_adj_indices
-)
-from recommenders.models.lightgcn.lightgcn_singlenode import LightGCN
-from recommenders.utils.evaluate import (
-    map_at_k, ndcg_at_k, precision_at_k, recall_at_k
-)
+from recommenders.datasets.python_splitters import python_stratified_split
+from recommenders.evaluation.python_evaluation import map, ndcg_at_k, precision_at_k, recall_at_k
+from recommenders.utils.constants import SEED as DEFAULT_SEED
 
 import warnings
 warnings.filterwarnings('ignore')
 
 print(f"System: {sys.version}")
-print(f"NumPy: {np.__version__}")
 print(f"Pandas: {pd.__version__}")
-print("环境设置完成！")
+print(f"TensorFlow: {tf.__version__}")
 
 # %% [markdown]
-# # 一、加载数据集
+# # 一、加载和分割数据
 
 # %% [code]
-# 加载MovieLens数据集（recommenders库内置支持）
-print("正在加载MovieLens 100K数据集...")
+# 设置参数
+TOP_K = 20  # 修改：与YAML配置一致
+MOVIELENS_DATA_SIZE = '100k'
+EPOCHS = 1000  # 修改：与YAML配置一致
+BATCH_SIZE = 1024
+SEED = DEFAULT_SEED
 
-try:
-    # 使用recommenders内置的MovieLens加载器
-    data = movielens.load_pandas_dataframe()
-    print(f"数据集加载成功！形状: {data.shape}")
-    print(f"列名: {data.columns.tolist()}")
-
-except Exception as e:
-    print(f"加载数据集失败: {e}")
-    print("使用示例数据...")
-    
-    # 创建示例数据集
-    np.random.seed(42)
-    n_users = 1000
-    n_items = 2000
-    n_interactions = 20000
-    
-    data = pd.DataFrame({
-        'userID': np.random.randint(0, n_users, n_interactions),
-        'itemID': np.random.randint(0, n_items, n_interactions),
-        'rating': np.random.choice([3, 4, 5], n_interactions, p=[0.2, 0.3, 0.5]),
-        'timestamp': np.random.randint(1500000000, 1600000000, n_interactions)
-    })
-    
-    # 去重
-    data = data.drop_duplicates(['userID', 'itemID'])
-    print(f"示例数据集创建成功！形状: {data.shape}")
+print(f"Top-K: {TOP_K}")
+print(f"Dataset: MovieLens {MOVIELENS_DATA_SIZE}")
+print(f"Epochs: {EPOCHS}")
+print(f"Batch size: {BATCH_SIZE}")
 
 # %% [code]
-# 数据探索和预处理
-print("=== 数据探索 ===")
-print(f"总交互数: {len(data)}")
-print(f"用户数: {data['userID'].nunique()}")
-print(f"物品数: {data['itemID'].nunique()}")
-print(f"稀疏度: {len(data) / (data['userID'].nunique() * data['itemID'].nunique()) * 100:.4f}%")
-print()
+# 加载MovieLens数据集
+print("正在加载MovieLens数据集...")
 
-# 查看评分分布
-if 'rating' in data.columns:
-    print("评分分布:")
-    print(data['rating'].value_counts().sort_index())
-    print()
-
-# 查看前几行
+df = movielens.load_pandas_df(size=MOVIELENS_DATA_SIZE)
+print(f"数据加载成功！形状: {df.shape}")
 print("数据预览:")
-display(data.head())
+display(df.head())
 
 # %% [code]
-# 数据预处理：转换为隐式反馈
-# 对于推荐系统，我们通常使用隐式反馈（用户是否交互）而非显式评分
-print("转换为隐式反馈格式...")
-
-# 创建隐式反馈数据（所有交互都视为正样本）
-implicit_data = data[['userID', 'itemID']].copy()
-implicit_data['label'] = 1  # 所有交互都标记为1
-
-print(f"隐式反馈数据形状: {implicit_data.shape}")
-print("数据预览:")
-display(implicit_data.head())
-
-# %% [markdown]
-# # 二、数据集分割
-
-# %% [code]
-# 将数据集分割为训练集、验证集和测试集
+# 分割数据集
 print("分割数据集...")
+train, test = python_stratified_split(df, ratio=0.75, col_user='userID', col_item='itemID', seed=SEED)
 
-# 使用random split
-train_df, test_df = python_random_split(
-    implicit_data,
-    ratio=0.8,
-    seed=42
-)
-
-# 进一步分割测试集为验证集和测试集
-val_df, test_df = python_random_split(
-    test_df,
-    ratio=0.5,
-    seed=42
-)
-
-print(f"训练集大小: {len(train_df)}")
-print(f"验证集大小: {len(val_df)}")
-print(f"测试集大小: {len(test_df)}")
+print(f"训练集大小: {len(train)}")
+print(f"测试集大小: {len(test)}")
 print()
 
 # 查看数据格式
 print("训练集预览:")
-display(train_df.head())
+display(train.head())
 
 # %% [markdown]
-# # 三、LightGCN模型训练
+# # 二、准备数据
 
 # %% [code]
-# 准备LightGCN所需的数据格式
-print("准备LightGCN数据...")
+# 使用ImplicitCF准备数据
+print("准备数据...")
 
-# 使用lightgcn_utils中的prepare_data函数
-train_data, test_data, n_users, n_items = prepare_data(
-    train_df,
-    test_df,
-    user_col='userID',
-    item_col='itemID',
-    interaction_col='label'
-)
+data = ImplicitCF(train=train, test=test, seed=SEED)
+print(f"用户数: {data.n_users}")
+print(f"物品数: {data.n_items}")
+print(f"训练交互数: {len(train)}")
+print(f"测试交互数: {len(test)}")
 
-print(f"用户数: {n_users}")
-print(f"物品数: {n_items}")
-print(f"训练交互数: {len(train_data)}")
-print(f"测试交互数: {len(test_data)}")
+# %% [markdown]
+# # 三、配置和训练LightGCN模型
 
 # %% [code]
-# 构建邻接矩阵
-print("构建邻接矩阵...")
+# 创建和训练LightGCN模型
+print("创建LightGCN模型...")
 
-adj_matrix = construct_adj_matrix(
-    train_data,
-    n_users,
-    n_items,
-    interaction_threshold=0.0,
-    use_user_item_only=True
-)
+# 手动创建hparams对象（避免依赖yaml文件）
+import types
+hparams = types.SimpleNamespace()
 
-print(f"邻接矩阵形状: {adj_matrix.shape}")
-print(f"非零元素数: {adj_matrix.nnz}")
+# model组参数（按照YAML配置）
+hparams.model_type = 'lightgcn'
+hparams.embed_size = 64
+hparams.n_layers = 3
 
-# %% [code]
-# 设置LightGCN模型参数
-print("配置LightGCN模型参数...")
+# train组参数（按照YAML配置）
+hparams.batch_size = BATCH_SIZE
+hparams.decay = 0.0001
+hparams.epochs = EPOCHS
+hparams.learning_rate = 0.001
+hparams.eval_epoch = -1  # -1表示训练期间不评估
+hparams.top_k = TOP_K
 
-model_params = {
-    'n_users': n_users,
-    'n_items': n_items,
-    'n_factors': 64,          # 嵌入维度
-    'n_layers': 3,            # GCN层数
-    'batch_size': 1024,       # 批次大小
-    'learning_rate': 0.001,   # 学习率
-    'n_epochs': 50,          # 训练轮数
-    'reg_weight': 1e-4,      # L2正则化
-    'loss': 'bpr',           # BPR损失函数
-    'use_bias': False,       # 不使用偏置
-    'seed': 42               # 随机种子
-}
+# info组参数（按照YAML配置）
+hparams.save_model = False
+hparams.save_epoch = 100
+hparams.metrics = ["recall", "ndcg", "precision", "map"]
+hparams.MODEL_DIR = './model_checkpoint'
 
-print("模型参数:")
-for key, value in model_params.items():
-    print(f"  {key}: {value}")
-
-# %% [code]
-# 初始化和训练LightGCN模型
-print("初始化LightGCN模型...")
-
-model = LightGCN(
-    n_users=model_params['n_users'],
-    n_items=model_params['n_items'],
-    n_factors=model_params['n_factors'],
-    n_layers=model_params['n_layers'],
-    batch_size=model_params['batch_size'],
-    learning_rate=model_params['learning_rate'],
-    n_epochs=model_params['n_epochs'],
-    reg_weight=model_params['reg_weight'],
-    loss=model_params['loss'],
-    use_bias=model_params['use_bias'],
-    seed=model_params['seed']
-)
+model = LightGCN(hparams, data, seed=SEED)
 
 print("开始训练...")
-model.fit(
-    train_data=train_data,
-    adj_matrix=adj_matrix,
-    verbose=True
-)
-print("训练完成！")
+with Timer() as train_time:
+    model.fit()
+
+print(f"训练完成！耗时: {train_time.interval:.2f} 秒")
 
 # %% [markdown]
-# # 四、模型评估
-# 
-# 评估指标说明：
-# 
-# | 指标 | 类型 | 说明 |
-# |------|------|------|
-# | Precision@K | 排序 | 推荐的前 K 个中有多少在测试集里 |
-# | Recall@K    | 排序 | 测试集里的物品有多少被推荐了 |
-# | nDCG@K      | 排序 | 考虑排序位置的加权 Recall |
-# | MAP@K       | 排序 | 平均精度（综合 P@1..P@K）|
+# # 四、推荐和评估
 
 # %% [code]
-# 在测试集上评估模型
+# 为测试集用户生成推荐
+print("生成推荐...")
+topk_scores = model.recommend_k_items(test, top_k=TOP_K, remove_seen=True)
+
+print("推荐完成！")
+print("推荐结果预览:")
+display(topk_scores.head())
+
+# %% [code]
+# 评估模型性能
 print("评估模型性能...")
 print()
 
-# 获取Top-K推荐
-TOP_K = 10
+eval_map = map(test, topk_scores, k=TOP_K)
+eval_ndcg = ndcg_at_k(test, topk_scores, k=TOP_K)
+eval_precision = precision_at_k(test, topk_scores, k=TOP_K)
+eval_recall = recall_at_k(test, topk_scores, k=TOP_K)
 
-# 为测试集用户生成推荐
-test_users = test_data['userID'].unique()
-print(f"测试集用户数: {len(test_users)}")
-
-# 批量获取推荐结果
-all_recommendations = []
-
-for user_id in test_users[:100]:  # 只评估前100个用户（演示用）
-    # 获取该用户的推荐
-    user_recs = model.recommend(
-        user_id=user_id,
-        n_items=n_items,
-        top_k=TOP_K,
-        train_data=train_data,
-        adj_matrix=adj_matrix,
-        remove_seen=True
-    )
-    
-    if user_recs is not None and len(user_recs) > 0:
-        user_recs['userID'] = user_id
-        all_recommendations.append(user_recs)
-
-# 合并所有推荐结果
-if all_recommendations:
-    rec_df = pd.concat(all_recommendations, ignore_index=True)
-    print(f"生成推荐数: {len(rec_df)}")
-    print()
-    
-    # 计算评估指标
-    # 注意：需要将推荐结果和测试数据转换为评估函数所需的格式
-    
-    # 准备ground truth（测试集的实际交互）
-    ground_truth = test_df.copy()
-    
-    # 计算指标（需要对齐数据格式）
-    # 这里展示简化版本
-    print("=== 评估结果 ===")
-    print("注意：完整的评估需要更复杂的数据对齐")
-    print("建议使用recommenders.utils.evaluate中的函数")
-    
-else:
-    print("未能生成推荐结果")
-
-# %% [code]
-# 简化的评估方法
-print("使用简化的评估方法...")
-print()
-
-# 为每个测试用户计算命中率
-hit_count = 0
-total_users = 0
-
-for user_id in test_users[:100]:
-    # 获取该用户在测试集中的真实交互物品
-    true_items = set(test_df[test_df['userID'] == user_id]['itemID'].values)
-    
-    if len(true_items) == 0:
-        continue
-    
-    # 获取推荐物品
-    user_recs = model.recommend(
-        user_id=user_id,
-        n_items=n_items,
-        top_k=TOP_K,
-        train_data=train_data,
-        adj_matrix=adj_matrix,
-        remove_seen=True
-    )
-    
-    if user_recs is not None and len(user_recs) > 0:
-        rec_items = set(user_recs['itemID'].values)
-        
-        # 计算命中（推荐中包含真实交互）
-        if len(rec_items.intersection(true_items)) > 0:
-            hit_count += 1
-    
-    total_users += 1
-
-hit_rate = hit_count / total_users if total_users > 0 else 0
-print(f"=== 评估结果 (Top-{TOP_K}) ===")
-print(f"评估用户数: {total_users}")
-print(f"命中用户数: {hit_count}")
-print(f"Hit Rate: {hit_rate:.4f}")
+print("=== 评估结果 ===")
+print(f"MAP@K:\t{eval_map:.6f}")
+print(f"NDCG@K:\t{eval_ndcg:.6f}")
+print(f"Precision@K:\t{eval_precision:.6f}")
+print(f"Recall@K:\t{eval_recall:.6f}")
 
 # %% [markdown]
 # # 五、推荐结果展示
 
 # %% [code]
+# 加载电影信息（用于展示电影名称）
+print("加载电影信息...")
+
+movies_df = movielens.load_pandas_df(
+    size='100k',
+    header=['itemID', 'title', 'release_date', 'video_release_date', 'IMDb_URL',
+           'unknown', 'Action', 'Adventure', 'Animation', "Children's", 'Comedy',
+           'Crime', 'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror',
+           'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
+)
+
+print(f"电影信息加载成功！形状: {movies_df.shape}")
+
+# %% [code]
 # 展示某个用户的推荐结果
-EXAMPLE_USER = test_users[0]
+EXAMPLE_USER = test['userID'].unique()[0]
 print(f"为用户 {EXAMPLE_USER} 生成推荐...")
 print()
 
-# 获取推荐
-user_recs = model.recommend(
-    user_id=EXAMPLE_USER,
-    n_items=n_items,
-    top_k=10,
-    train_data=train_data,
-    adj_matrix=adj_matrix,
-    remove_seen=True
-)
+# 获取该用户的推荐结果
+user_recs = topk_scores[topk_scores['userID'] == EXAMPLE_USER].copy()
 
-if user_recs is not None and len(user_recs) > 0:
-    print(f"=== 用户 {EXAMPLE_USER} 的Top-10推荐 ===")
-    display(user_recs)
+if len(user_recs) > 0:
+    # 添加电影名称
+    user_recs = user_recs.merge(movies_df[['itemID', 'title']], on='itemID', how='left')
+    
+    print(f"=== 用户 {EXAMPLE_USER} 的Top-{TOP_K}推荐（含电影名称）===")
+    display(user_recs[['itemID', 'title', 'prediction']])
     print()
     
     # 查看该用户在训练集中的历史交互
-    user_history = train_df[train_df['userID'] == EXAMPLE_USER]
+    user_history = train[train['userID'] == EXAMPLE_USER].copy()
+    user_history = user_history.merge(movies_df[['itemID', 'title']], on='itemID', how='left')
     print(f"用户在训练集中的交互数: {len(user_history)}")
+    print("训练集历史交互（含电影名称）:")
+    display(user_history[['itemID', 'title', 'rating']].head(10))
     print()
     
-    # 查看该用户在测试集中的真实交互
-    user_test = test_df[test_df['userID'] == EXAMPLE_USER]
+    # 查看该用户在测试集中的真实交互（含电影名称）
+    user_test = test[test['userID'] == EXAMPLE_USER].copy()
+    user_test = user_test.merge(movies_df[['itemID', 'title']], on='itemID', how='left')
     print(f"用户在测试集中的交互数: {len(user_test)}")
-    print("测试集真实交互的物品ID:")
-    print(user_test['itemID'].values)
-    
+    print("测试集真实交互（含电影名称）:")
+    display(user_test[['itemID', 'title', 'rating']])
 else:
-    print("未能生成推荐")
+    print("未能找到该用户的推荐结果")
 
 # %% [code]
 # 可视化：推荐分数分布
-if user_recs is not None and len(user_recs) > 0:
+import matplotlib.pyplot as plt
+
+if len(user_recs) > 0:
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
     # 推荐分数分布
-    axes[0].bar(range(1, len(user_recs) + 1), user_recs['score'], alpha=0.7)
+    axes[0].bar(range(1, len(user_recs) + 1), user_recs['prediction'], alpha=0.7)
     axes[0].set_xlabel('Recommendation Rank', fontsize=12)
     axes[0].set_ylabel('Prediction Score', fontsize=12)
     axes[0].set_title(f'User {EXAMPLE_USER} Recommendation Scores', fontsize=14)
     axes[0].grid(True, alpha=0.3)
     
-    # 训练集交互数分布（多个用户）
-    user_interaction_counts = train_df['userID'].value_counts()
+    # 用户交互分布
+    user_interaction_counts = train['userID'].value_counts()
     axes[1].hist(user_interaction_counts.values, bins=50, alpha=0.7, edgecolor='black')
     axes[1].set_xlabel('Number of Interactions', fontsize=12)
     axes[1].set_ylabel('Number of Users', fontsize=12)
@@ -401,24 +243,7 @@ if user_recs is not None and len(user_recs) > 0:
     print(f"Min interactions: {user_interaction_counts.min()}")
 
 # %% [markdown]
-# # 六、模型保存和加载
-
-# %% [code]
-# 保存训练好的模型
-print("保存模型...")
-
-model_save_path = 'lightgcn_model.pth'
-model.save_model(model_save_path)
-print(f"模型已保存到: {model_save_path}")
-print()
-
-# 加载模型（用于推理）
-print("加载模型...")
-model.load_model(model_save_path)
-print("模型加载成功！")
-
-# %% [markdown]
-# # 七、总结
+# # 六、总结
 
 # %% [code]
 # 打印完整总结
@@ -427,25 +252,30 @@ print("LightGCN推荐系统 - 实验总结")
 print("="*60)
 print()
 print("【数据集】")
-print(f"  - 类型: MovieLens 100K")
-print(f"  - 用户数: {n_users}")
-print(f"  - 物品数: {n_items}")
-print(f"  - 训练交互数: {len(train_df)}")
+print(f"  - 类型: MovieLens {MOVIELENS_DATA_SIZE}")
+print(f"  - 用户数: {data.n_users}")
+print(f"  - 物品数: {data.n_items}")
+print(f"  - 训练交互数: {len(train)}")
+print(f"  - 测试交互数: {len(test)}")
 print()
 print("【模型配置】")
 print(f"  - 算法: LightGCN")
-print(f"  - 嵌入维度: {model_params['n_factors']}")
-print(f"  - GCN层数: {model_params['n_layers']}")
-print(f"  - 损失函数: {model_params['loss']}")
-print(f"  - 训练轮数: {model_params['n_epochs']}")
+print(f"  - 嵌入维度: 64")
+print(f"  - GCN层数: 3")
+print(f"  - 损失函数: BPR")
+print(f"  - 训练轮数: {EPOCHS}")
+print(f"  - 学习率: 0.005")
 print()
 print("【评估结果】")
-print(f"  - Top-{TOP_K} Hit Rate: {hit_rate:.4f}")
+print(f"  - MAP@{TOP_K}: {eval_map:.4f}")
+print(f"  - NDCG@{TOP_K}: {eval_ndcg:.4f}")
+print(f"  - Precision@{TOP_K}: {eval_precision:.4f}")
+print(f"  - Recall@{TOP_K}: {eval_recall:.4f}")
 print()
 print("【下一步改进】")
 print("  1. 尝试不同的嵌入维度 (32, 64, 128)")
 print("  2. 调整GCN层数 (2, 3, 4)")
-print("  3. 使用更大的MovieLens数据集")
-print("  4. 实现完整的评估指标 (MAP, nDCG, Precision, Recall)")
-print("  5. 与其他算法对比 (SAR, NCF, SASRec)")
+print("  3. 使用更大的MovieLens数据集 (1M, 10M)")
+print("  4. 调参：学习率、正则化系数、批次大小")
+print("  5. 与其他算法对比 (SAR, NCF)")
 print("="*60)
