@@ -1,21 +1,24 @@
 # %% [markdown]
-# # LightGCN推荐系统 - Amazon产品数据集
-# 本脚本使用Microsoft Recommenders库中的LightGCN算法，在Amazon产品数据集上构建推荐系统。
+# # LightGCN推荐系统 - MovieLens数据集
+# 本脚本使用Microsoft Recommenders库中的LightGCN算法，在MovieLens数据集上构建推荐系统。
 # 
 # # LightGCN简介
 # LightGCN是2020年提出的图神经网络推荐算法，在NGCF基础上简化而来：
 # - 移除特征转换和非线性激活
 # - 只在用户-物品图上做邻域聚合
 # - 更简单、更高效、性能更好
+# 
 # # 数据集
-# 使用Amazon Product Dataset（亚马逊产品数据集）：
-# - 真实的电商场景，具有商业价值
-# - 包含用户评分、产品信息、评论等
-# - 适合隐式反馈推荐（点击、购买等行为）
+# 使用MovieLens 100K数据集（电影推荐）：
+# - 943个用户，1682部电影
+# - 100,000条评分记录（1-5分）
+# - 经典的推荐系统基准数据集
 
 # %% [code]
 # 安装依赖
-%pip install -q recommenders>=0.7.0
+%pip install -q "recommenders>=0.7.0"
+%pip install -q pandas numpy scipy scikit-learn
+%pip install -q torch torchvision
 
 # %% [code]
 # 导入必要的库
@@ -25,7 +28,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import display
 
-from recommenders.datasets import load_amazon_reviews
+from recommenders.datasets import movielens
 from recommenders.datasets.python_splitters import python_random_split
 from recommenders.models.lightgcn.lightgcn_utils import (
     prepare_data,
@@ -46,29 +49,23 @@ print(f"Pandas: {pd.__version__}")
 print("环境设置完成！")
 
 # %% [markdown]
-# # 一、加载Amazon数据集
+# # 一、加载数据集
 
 # %% [code]
-# 加载Amazon Reviews数据集
-# 使用5-core版本（每个用户/物品至少有5个交互）
-print("正在加载Amazon Reviews数据集...")
+# 加载MovieLens数据集（recommenders库内置支持）
+print("正在加载MovieLens 100K数据集...")
 
 try:
-    # 尝试加载小规模数据集用于演示
-    data = load_amazon_reviews(
-        dataset_name='Toys_and_Games',  # 玩具和游戏类别
-        kind='5-core',
-        n_cores=4,
-        use_pandas=True
-    )
+    # 使用recommenders内置的MovieLens加载器
+    data = movielens.load_pandas_dataframe()
     print(f"数据集加载成功！形状: {data.shape}")
     print(f"列名: {data.columns.tolist()}")
 
 except Exception as e:
-    print(f"加载官方数据集失败: {e}")
+    print(f"加载数据集失败: {e}")
     print("使用示例数据...")
     
-    # 创建示例数据集（如果无法访问官方数据）
+    # 创建示例数据集
     np.random.seed(42)
     n_users = 1000
     n_items = 2000
@@ -430,7 +427,7 @@ print("LightGCN推荐系统 - 实验总结")
 print("="*60)
 print()
 print("【数据集】")
-print(f"  - 类型: Amazon Product Dataset (Toys_and_Games)")
+print(f"  - 类型: MovieLens 100K")
 print(f"  - 用户数: {n_users}")
 print(f"  - 物品数: {n_items}")
 print(f"  - 训练交互数: {len(train_df)}")
@@ -448,7 +445,7 @@ print()
 print("【下一步改进】")
 print("  1. 尝试不同的嵌入维度 (32, 64, 128)")
 print("  2. 调整GCN层数 (2, 3, 4)")
-print("  3. 使用更大的Amazon数据集子集")
+print("  3. 使用更大的MovieLens数据集")
 print("  4. 实现完整的评估指标 (MAP, nDCG, Precision, Recall)")
 print("  5. 与其他算法对比 (SAR, NCF, SASRec)")
 print("="*60)
