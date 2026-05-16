@@ -119,12 +119,15 @@ top_k_recs = sar.recommend_k_items(
     remove_seen=True,
 )
 
-print(f"Recommendations generated for {top_k_recs['userID'].nunique()} users")
-print("\nSample recommendations (first 20 rows):")
-display(top_k_recs.head(20))
+# 重要：添加rank列（评估函数需要）
+# 必须按照用户分组，并按照prediction降序排列后添加rank
+top_k_recs = top_k_recs.sort_values(['userID', 'prediction'], ascending=[True, False])
+top_k_recs['rank'] = top_k_recs.groupby('userID', sort=False).cumcount() + 1
 
-# Add rank column for each user's recommendations
-top_k_recs['rank'] = top_k_recs.groupby('userID').cumcount() + 1
+print(f"Recommendations generated for {top_k_recs['userID'].nunique()} users")
+print(f"Columns: {top_k_recs.columns.tolist()}")
+print("\nSample recommendations (first 10 rows):")
+display(top_k_recs.head(10))
 
 # %% [markdown]
 # ## 五、推荐结果可视化
@@ -138,7 +141,7 @@ user_history = train_df[train_df["userID"] == EXAMPLE_USER].sort_values("rating"
 print("Historical interactions (top rated):")
 display(user_history.head(10))
 
-user_recs = top_k_recs[top_k_recs["userID"] == EXAMPLE_USER].sort_values("rank")
+user_recs = top_k_recs[top_k_recs["userID"] == EXAMPLE_USER]
 print(f"\nTop-{TOP_K} recommendations:")
 display(user_recs)
 
@@ -151,7 +154,7 @@ axes[0].set_xlabel("Rating")
 axes[0].set_ylabel("Count")
 
 if not user_recs.empty:
-    axes[1].bar(user_recs["rank"], user_recs["prediction"], alpha=0.7)
+    axes[1].bar(range(1, len(user_recs) + 1), user_recs["prediction"], alpha=0.7)
     axes[1].set_title(f"User {EXAMPLE_USER} - Top {TOP_K} Scores")
     axes[1].set_xlabel("Rank")
     axes[1].set_ylabel("Prediction Score")
@@ -259,7 +262,7 @@ def get_recommendations_for_user(user_id, model, train_data, top_k=10):
     candidate_items = list(all_items - user_history)
 
     if len(candidate_items) == 0:
-        return pd.DataFrame(columns=["userID", "itemID", "prediction", "rank"])
+        return pd.DataFrame(columns=["userID", "itemID", "prediction"])
 
     test_input = pd.DataFrame({
         "userID": [user_id] * len(candidate_items),
@@ -268,9 +271,7 @@ def get_recommendations_for_user(user_id, model, train_data, top_k=10):
     })
 
     recs = model.recommend_k_items(test_input, top_k=top_k, remove_seen=True)
-    user_recs = recs[recs["userID"] == user_id].copy()
-    user_recs['rank'] = range(1, len(user_recs) + 1)
-    return user_recs.sort_values("rank")
+    return recs[recs["userID"] == user_id]
 
 
 target_user = train_df["userID"].iloc[0]
