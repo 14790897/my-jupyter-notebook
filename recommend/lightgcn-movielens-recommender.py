@@ -50,7 +50,7 @@ print(f"TensorFlow: {tf.__version__}")
 TOP_K = 20  # 修改：与YAML配置一致
 MOVIELENS_DATA_SIZE = '100k'
 EPOCHS = 1000  # 修改：与YAML配置一致
-BATCH_SIZE = 1024
+BATCH_SIZE = 4096
 SEED = DEFAULT_SEED
 
 print(f"Top-K: {TOP_K}")
@@ -97,6 +97,8 @@ print(f"测试交互数: {len(test)}")
 # # 三、配置和训练LightGCN模型
 
 # %% [code]
+np.mat = np.asmatrix  # 模拟 np.mat，让老代码能用
+
 # 创建和训练LightGCN模型
 print("创建LightGCN模型...")
 
