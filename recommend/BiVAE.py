@@ -12,7 +12,6 @@
 
 # %% [code]
 # 安装依赖（Kaggle环境）
-%pip install -q "numpy<2.0"
 %pip install -q "recommenders>=0.7.0"
 %pip install -q cornac
 
@@ -46,15 +45,15 @@ print(f"Cornac: {cornac.__version__}")
 # 设置参数
 TOP_K = 20
 NUM_EPOCHS = 30
-BATCH_SIZE = 128
+BATCH_SIZE = 1024
 SEED = DEFAULT_SEED
 
 # BiVAE模型参数
 LATENT_DIM = 50
 ENCODER_DIMS = [100]
 ACT_FUNC = "tanh"
-LIKELIHOOD = "pois"  # Poisson似然，适合隐式反馈
-LEARNING_RATE = 0.001
+LIKELIHOOD = "gaus"  # Gaussian似然，适合MovieLens连续评分
+LEARNING_RATE = 5e-4
 
 # Kaggle MovieLens 20M 数据集路径
 DATASET_PATH = '/kaggle/input/datasets/organizations/grouplens/movielens-20m-dataset'
@@ -171,7 +170,7 @@ bivae = cornac.models.BiVAECF(
     act_fn=ACT_FUNC,
     likelihood=LIKELIHOOD,
     n_epochs=NUM_EPOCHS,
-    batch_size=BATCH_SIZE,
+    # batch_size=BATCH_SIZE,
     learning_rate=LEARNING_RATE,
     seed=SEED,
     use_gpu=torch.cuda.is_available(),
