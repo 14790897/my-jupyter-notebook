@@ -212,7 +212,7 @@ with Timer() as pred_time:
         bivae, train,
         usercol='userID', itemcol='itemID',
         remove_seen=True,
-        batch_size=BATCH_SIZE
+        # batch_size=BATCH_SIZE
     )
 
 print(f"推荐完成！耗时: {pred_time.interval:.2f} 秒")
