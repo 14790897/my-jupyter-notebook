@@ -206,13 +206,17 @@ display(movies_df.head())
 # 为新用户生成推荐
 print(f"为用户 {MY_USER_ID} 生成 Top-{TOP_K} 推荐...")
 
-# 使用Recommenders的predict_ranking生成推荐排序
+# 只给目标用户生成推荐，避免全量OOM
+test_my_user = pd.DataFrame({
+    'userID': [MY_USER_ID],
+    'itemID': [0]  # 占位，模型不使用
+})
+
 with Timer() as pred_time:
     all_predictions = predict_ranking(
-        bivae, train,
+        bivae, test_my_user,
         usercol='userID', itemcol='itemID',
         remove_seen=True,
-        # batch_size=BATCH_SIZE
     )
 
 print(f"推荐完成！耗时: {pred_time.interval:.2f} 秒")
@@ -260,15 +264,19 @@ print(f"采样数据量: {len(test_sample)}")
 
 # 为采样用户生成推荐（使用predict_ranking）
 print("为采样用户生成推荐...")
+
+# 只传采样用户，避免全量OOM
+sample_users_df = pd.DataFrame({
+    'userID': list(test_user_sample),
+    'itemID': [0] * len(test_user_sample)
+})
+
 with Timer() as sample_pred_time:
     sample_predictions = predict_ranking(
-        bivae, train,
+        bivae, sample_users_df,
         usercol='userID', itemcol='itemID',
         remove_seen=True,
-        batch_size=BATCH_SIZE
     )
-    # 只保留采样用户
-    sample_predictions = sample_predictions[sample_predictions['userID'].isin(test_user_sample)]
 
 print(f"推荐完成！耗时: {sample_pred_time.interval:.2f} 秒")
 
