@@ -19,7 +19,7 @@ FONT_SIZE = 36
 FONT_COLOR = (255, 255, 0)  # 黄色
 STROKE_COLOR = (0, 0, 0)  # 黑色描边
 STROKE_WIDTH = 2
-SUBTITLE_POSITION = "bottom"  # bottom / top / center
+SUBTITLE_POSITION = "top"  # bottom / top / center
 
 # 字幕动画：每个字的显示时间
 CHAR_DISPLAY_TIME = 0.08  # 每个字 80ms
@@ -202,53 +202,37 @@ print(
 
 # %% [markdown]
 # # 构建字幕时间线
-# 将每段分析的文本均匀分布到对应的音频时间区间内，并添加逐字动画效果
+# 将每段分析结果映射到对应的时间区间，一次性整段显示
 
 # %% [code]
-print("=== Step 6: 构建逐字字幕时间线 ===")
+print("=== Step 6: 构建字幕时间线 ===")
 import shutil
 
 def build_subtitle_timeline(results):
-    """
-    为每段分析结果构建逐字时间线。
-    每个字有 start_time 和 end_time，实现逐字打印效果。
-    """
+    """为每段分析结果构建时间段，到达起始时间时一次性显示整段文本。"""
     timeline = []
     for segment in results:
         text = segment["text"]
         start = segment["start_sec"]
         end = segment["end_sec"]
-        duration = end - start
 
         if not text.strip():
             continue
 
-        # 逐字分配时间
-        n_chars = len(text)
-        char_time = duration / max(n_chars, 1)
-
-        for j, char in enumerate(text):
-            char_start = start + j * char_time
-            char_end = char_start + char_time
-            # 确保最后一个字不会超出片段结束
-            if j == n_chars - 1:
-                char_end = end
-            timeline.append(
-                {
-                    "char": char,
-                    "start": round(char_start, 3),
-                    "end": round(char_end, 3),
-                }
-            )
+        timeline.append({
+            "text": text,
+            "start": round(start, 3),
+            "end": round(end, 3),
+        })
     return timeline
 
 
 subtitle_timeline = build_subtitle_timeline(results)
-total_chars = len(subtitle_timeline)
-print(f"Total subtitle characters: {total_chars}")
-print(f"First 10 entries:")
-for entry in subtitle_timeline[:10]:
-    print(f"  '{entry['char']}' [{entry['start']:.2f}s - {entry['end']:.2f}s]")
+print(f"Total subtitle segments: {len(subtitle_timeline)}")
+for entry in subtitle_timeline[:5]:
+    print(f"  [{entry['start']:.1f}s - {entry['end']:.1f}s] {entry['text'][:30]}...")
+if len(subtitle_timeline) > 5:
+    print(f"  ... ({len(subtitle_timeline) - 5} more)")
 
 # %% [code]
 print("=== Step 7: 获取视频帧信息 ===")
@@ -294,37 +278,98 @@ print(f"Codec: {vstream.get('codec_name', 'unknown')}")
 print(f"Pixel format: {vstream.get('pix_fmt', 'unknown')}")
 
 # %% [code]
-print("=== Step 8: 合成视频（逐字字幕叠加）===")
-import bisect
+print("=== Step 8: 合成视频（字幕叠加）===")
 
-# 预计算每个字幕字符的起始时间，用于二分查找
-timeline_start_times = [entry["start"] for entry in subtitle_timeline]
+# 预计算每个字幕段的起始和结束时间
 
 
-def get_subtitle_at_time(t, timeline, start_times):
-    """使用二分查找快速定位当前时刻应显示的字幕"""
-    pos = bisect.bisect_right(start_times, t)
-    return "".join(entry["char"] for entry in timeline[:pos])
+def get_subtitle_at_time(t, timeline):
+    """获取当前时刻应显示的字幕文本"""
+    for seg in timeline:
+        if seg["start"] <= t <= seg["end"]:
+            return seg["text"]
+    return None
 
 
-def put_text_with_outline(
-    frame, text, org, font_scale, thickness, font_color, stroke_color, stroke_w
-):
-    """绘制带描边的文字"""
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    # 描边
-    cv2.putText(
-        frame,
-        text,
-        org,
-        font,
-        font_scale,
-        stroke_color,
-        thickness + stroke_w,
-        cv2.LINE_AA,
-    )
-    # 正文
-    cv2.putText(frame, text, org, font, font_scale, font_color, thickness, cv2.LINE_AA)
+# ---- PIL 中文文字绘制 ----
+from PIL import Image, ImageDraw, ImageFont
+
+# 下载中文字体（Kaggle 预装目录常见路径，找不到则从网络下载）
+FONT_PATHS = [
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+]
+font_path = None
+for fp in FONT_PATHS:
+    if os.path.exists(fp):
+        font_path = fp
+        break
+if font_path is None:
+    print("Downloading Chinese font...")
+    os.makedirs("/kaggle/working/fonts", exist_ok=True)
+    font_url = "https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf"
+    font_path = "/kaggle/working/fonts/SourceHanSansSC-Regular.otf"
+    subprocess.run(["wget", "-q", "-O", font_path, font_url], capture_output=True)
+    if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
+        # 备选: 使用更小的字体
+        font_url = "https://github.com/SilentByte/fonts-noto-sans-cjk/raw/master/NotoSansSC-Regular.ttf"
+        subprocess.run(["wget", "-q", "-O", font_path, font_url], capture_output=True)
+print(f"Using font: {font_path}")
+
+pil_font = ImageFont.truetype(font_path, FONT_SIZE)
+
+
+def put_text_pil(frame_bgr, text, font_color, stroke_color, stroke_width):
+    """用 PIL 在 BGR 帧上绘制带描边的中文文字（自动换行）"""
+    # OpenCV BGR -> PIL RGB
+    img_pil = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(img_pil)
+
+    # 自动换行：根据视频宽度计算每行最多字符数
+    max_width = width - 40  # 左右各留 20px 边距
+    dummy_bbox = draw.textbbox((0, 0), "测", font=pil_font)
+    char_w = dummy_bbox[2] - dummy_bbox[0]
+    line_height = dummy_bbox[3] - dummy_bbox[1]
+    chars_per_line = max(1, int(max_width / char_w)) if char_w > 0 else 20
+
+    # 将文本按字符拆分为多行
+    lines = []
+    for i in range(0, len(text), chars_per_line):
+        lines.append(text[i : i + chars_per_line])
+
+    # 计算总文本块尺寸
+    total_h = line_height * len(lines)
+
+    # 计算起始 Y 位置
+    if SUBTITLE_POSITION == "bottom":
+        start_y = height - 40 - total_h
+    elif SUBTITLE_POSITION == "top":
+        start_y = 50
+    else:
+        start_y = (height - total_h) // 2
+
+    # 逐行绘制
+    for line_idx, line in enumerate(lines):
+        line_bbox = draw.textbbox((0, 0), line, font=pil_font)
+        line_w = line_bbox[2] - line_bbox[0]
+        text_x = max(0, (width - line_w) // 2)
+        text_y = start_y + line_idx * line_height
+
+        # 绘制描边
+        for dx in range(-stroke_width, stroke_width + 1):
+            for dy in range(-stroke_width, stroke_width + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                draw.text(
+                    (text_x + dx, text_y + dy), line, fill=stroke_color, font=pil_font
+                )
+        # 绘制正文
+        draw.text((text_x, text_y), line, fill=font_color, font=pil_font)
+
+    # PIL RGB -> OpenCV BGR
+    return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
 
 # ---- 方案: ffmpeg 原始帧 pipe → OpenCV 绘制字幕 → ffmpeg 编码输出 ----
@@ -364,10 +409,6 @@ fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 temp_output = "/kaggle/working/temp_output.mp4"
 writer = cv2.VideoWriter(temp_output, fourcc, fps, (width, height))
 
-font = cv2.FONT_HERSHEY_SIMPLEX
-font_scale = FONT_SIZE / 30
-thickness = max(1, FONT_SIZE // 12)
-
 processed = 0
 with open(raw_video_path, "rb") as f:
     for frame_idx in range(actual_frames):
@@ -380,28 +421,15 @@ with open(raw_video_path, "rb") as f:
         )
 
         t = frame_idx / fps
-        subtitle = get_subtitle_at_time(t, subtitle_timeline, timeline_start_times)
+        subtitle = get_subtitle_at_time(t, subtitle_timeline)
 
         if subtitle:
-            (text_w, text_h), _ = cv2.getTextSize(subtitle, font, font_scale, thickness)
-            if SUBTITLE_POSITION == "bottom":
-                text_x = max(0, (width - text_w) // 2)
-                text_y = height - 40
-            elif SUBTITLE_POSITION == "top":
-                text_x = max(0, (width - text_w) // 2)
-                text_y = 50 + text_h
-            else:
-                text_x = max(0, (width - text_w) // 2)
-                text_y = (height + text_h) // 2
-            put_text_with_outline(
+            frame = put_text_pil(
                 frame,
                 subtitle,
-                (text_x, text_y),
-                font_scale,
-                thickness,
-                FONT_COLOR,
-                STROKE_COLOR,
-                STROKE_WIDTH,
+                font_color=FONT_COLOR,
+                stroke_color=STROKE_COLOR,
+                stroke_width=STROKE_WIDTH,
             )
 
         writer.write(frame)
@@ -462,10 +490,14 @@ print(f"File size: {file_size:.1f} MB")
 print(f"\nDone! Video saved to: {final_output}")
 
 # %% [code]
-print("=== 清理临时文件 ===")
-import shutil
+print("=== Step 10: 压缩并展示结果 ===")
+from IPython.display import Video as IPVideo, display
 
-shutil.rmtree("/kaggle/working/chunks", ignore_errors=True)
-if os.path.exists(temp_output):
-    os.remove(temp_output)
-print("Cleanup done.")
+compressed_output_path = "/kaggle/working/liuhuaqiang-compressed.mp4"
+os.system(
+    f"ffmpeg -y -i {final_output} -vcodec libx264 -crf 28 {compressed_output_path}"
+)
+compressed_size = os.path.getsize(compressed_output_path) / 1024 / 1024
+print(f"Compressed: {compressed_output_path} ({compressed_size:.1f} MB)")
+
+display(IPVideo(compressed_output_path, embed=True))
