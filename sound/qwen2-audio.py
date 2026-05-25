@@ -188,13 +188,25 @@ with open(results_path, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 print(f"\nAll {len(results)} chunks analyzed. Saved to {results_path}")
 
+# %% [code]
+print("=== Step 5b: 释放模型显存 ===")
+del model
+del processor
+import torch
+
+torch.cuda.empty_cache()
+gc.collect()
+print(
+    f"GPU memory freed. CUDA allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB"
+)
+
 # %% [markdown]
 # # 构建字幕时间线
 # 将每段分析的文本均匀分布到对应的音频时间区间内，并添加逐字动画效果
 
 # %% [code]
 print("=== Step 6: 构建逐字字幕时间线 ===")
-
+import shutil
 
 def build_subtitle_timeline(results):
     """
@@ -363,7 +375,9 @@ with open(raw_video_path, "rb") as f:
         if len(raw_data) < frame_bytes:
             break
 
-        frame = np.frombuffer(raw_data, dtype=np.uint8).reshape((height, width, 3))
+        frame = (
+            np.frombuffer(raw_data, dtype=np.uint8).reshape((height, width, 3)).copy()
+        )
 
         t = frame_idx / fps
         subtitle = get_subtitle_at_time(t, subtitle_timeline, timeline_start_times)
