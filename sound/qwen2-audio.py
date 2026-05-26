@@ -10,8 +10,8 @@ VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 OUTPUT_PATH = "/kaggle/working/liuhuaqiang-output.mp4"
 
 # 音频切片参数（秒）
-CHUNK_DURATION = 5  # 每片时长
-OVERLAP_DURATION = 1  # 重叠时长
+CHUNK_DURATION = 20  # 每片时长
+OVERLAP_DURATION = 4  # 重叠时长
 SAMPLING_RATE = 16000  # Qwen2-Audio 要求的采样率
 
 # 字幕样式
@@ -36,6 +36,8 @@ import subprocess
 import numpy as np
 from pathlib import Path
 from io import BytesIO
+
+# Note: Use %pip in Kaggle cells for package installs (see Step 0)
 
 print("=== Step 0: 安装依赖 ===")
 os.system("pip install -q pydub moviepy opencv-python-headless pillow")
@@ -129,23 +131,36 @@ print("Model loaded on", next(model.parameters()).device)
 print("=== Step 5: 逐段分析音频 ===")
 
 
-def analyze_audio_chunk(chunk_info):
+def analyze_audio_chunk(chunk_info, history_texts=None):
     audio_array, sr = librosa.load(
         chunk_info["path"], sr=processor.feature_extractor.sampling_rate
     )
+
+    # 构建对话：system + 历史上下文 + 当前音频
     conversation = [
         {
             "role": "system",
-            "content": "你是一个幽默风趣的视频解说员，擅长用搞笑的方式描述视频内容。",
-        },
-        {
-            "role": "user",
-            "content": [
-                {"type": "audio", "audio_url": chunk_info["path"]},
-                {"type": "text", "text": AUDIO_PROMPT},
-            ],
+            "content": "你是一个幽默风趣的视频解说员，擅长用搞笑的方式描述视频内容，这是一个完整的视频，剧情是连贯的。",
         },
     ]
+
+    # 添加上下文历史：之前每个 assistant 回复作为历史消息
+    # 让模型知道前面说了什么，保持内容连贯
+    if history_texts:
+        for prev_text in history_texts:
+            conversation.append({
+                "role": "assistant",
+                "content": prev_text,
+            })
+
+    # 添加当前音频查询
+    conversation.append({
+        "role": "user",
+        "content": [
+            {"type": "audio", "audio_url": chunk_info["path"]},
+            {"type": "text", "text": AUDIO_PROMPT},
+        ],
+    })
     text = processor.apply_chat_template(
         conversation, add_generation_prompt=True, tokenize=False
     )
@@ -163,12 +178,13 @@ def analyze_audio_chunk(chunk_info):
     return response.strip()
 
 
-results = []
+history_texts = []  # 累积上下文历史
+results = []  # 存储分析结果
 for i, chunk in enumerate(chunks):
     print(
         f"\n--- Analyzing chunk {i+1}/{len(chunks)} ({chunk['start_sec']:.1f}s-{chunk['end_sec']:.1f}s) ---"
     )
-    text = analyze_audio_chunk(chunk)
+    text = analyze_audio_chunk(chunk, history_texts=history_texts)
     print(f"Result: {text}")
     results.append(
         {
@@ -178,6 +194,8 @@ for i, chunk in enumerate(chunks):
             "text": text,
         }
     )
+    # 将当前结果加入历史上下文
+    history_texts.append(text)
     # 释放内存
     gc.collect()
     torch.cuda.empty_cache()
