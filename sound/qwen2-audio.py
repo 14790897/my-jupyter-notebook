@@ -234,6 +234,23 @@ for entry in subtitle_timeline[:5]:
 if len(subtitle_timeline) > 5:
     print(f"  ... ({len(subtitle_timeline) - 5} more)")
 
+# 保存为 SRT 字幕文件
+srt_path = "/kaggle/working/subtitles.srt"
+with open(srt_path, "w", encoding="utf-8") as f:
+    for i, seg in enumerate(subtitle_timeline, 1):
+        start_h = int(seg["start"] // 3600)
+        start_m = int((seg["start"] % 3600) // 60)
+        start_s = int(seg["start"] % 60)
+        start_ms = int((seg["start"] % 1) * 1000)
+        end_h = int(seg["end"] // 3600)
+        end_m = int((seg["end"] % 3600) // 60)
+        end_s = int(seg["end"] % 60)
+        end_ms = int((seg["end"] % 1) * 1000)
+        f.write(f"{i}\n")
+        f.write(f"{start_h:02d}:{start_m:02d}:{start_s:02d},{start_ms:03d} --> {end_h:02d}:{end_m:02d}:{end_s:02d},{end_ms:03d}\n")
+        f.write(f"{seg['text']}\n\n")
+print(f"SRT subtitle saved: {srt_path}")
+
 # %% [code]
 print("=== Step 7: 获取视频帧信息 ===")
 import cv2
