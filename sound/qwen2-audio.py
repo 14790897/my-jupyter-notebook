@@ -10,8 +10,8 @@ VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 OUTPUT_PATH = "/kaggle/working/liuhuaqiang-output.mp4"
 
 # 音频切片参数（秒）
-CHUNK_DURATION = 5  # 每片时长
-OVERLAP_DURATION = 1  # 重叠时长
+CHUNK_DURATION = 20  # 每片时长
+OVERLAP_DURATION = 4  # 重叠时长
 SAMPLING_RATE = 16000  # Qwen2-Audio 要求的采样率
 
 # 字幕样式
@@ -140,7 +140,7 @@ def analyze_audio_chunk(chunk_info, history_texts=None):
     conversation = [
         {
             "role": "system",
-            "content": "你是一个幽默风趣的视频解说员，擅长用搞笑的方式描述视频内容。",
+            "content": "你是一个幽默风趣的视频解说员，擅长用搞笑的方式描述视频内容，这是一个完整的视频，剧情是连贯的。",
         },
     ]
 
@@ -179,6 +179,7 @@ def analyze_audio_chunk(chunk_info, history_texts=None):
 
 
 history_texts = []  # 累积上下文历史
+results = []  # 存储分析结果
 for i, chunk in enumerate(chunks):
     print(
         f"\n--- Analyzing chunk {i+1}/{len(chunks)} ({chunk['start_sec']:.1f}s-{chunk['end_sec']:.1f}s) ---"
