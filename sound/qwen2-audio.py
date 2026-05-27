@@ -10,8 +10,8 @@ VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 OUTPUT_PATH = "/kaggle/working/liuhuaqiang-output.mp4"
 
 # 音频切片参数（秒）
-CHUNK_DURATION = 20  # 每片时长
-OVERLAP_DURATION = 4  # 重叠时长
+CHUNK_DURATION = 10  # 每片时长
+OVERLAP_DURATION = 3  # 重叠时长
 SAMPLING_RATE = 16000  # Qwen2-Audio 要求的采样率
 
 # 字幕样式
@@ -152,6 +152,18 @@ def analyze_audio_chunk(chunk_info, history_texts=None):
                 "role": "assistant",
                 "content": prev_text,
             })
+        conversation.append(
+            {
+                "role": "user",
+                "content": "以上是之前音频片段的分析历史，请结合上下文继续分析下一段。",
+            }
+        )
+        conversation.append(
+            {
+                "role": "assistant",
+                "content": "好的，我已了解前面的内容，请提供下一段音频。",
+            }
+        )
 
     # 添加当前音频查询
     conversation.append({
