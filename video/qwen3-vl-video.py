@@ -13,10 +13,7 @@ VIDEO_SCALE = "640:-1"  # 缩小分辨率，降低显存
 MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止显存随对话增长而OOM
 
 ANALYSIS_PROMPT = """请用幽默风趣的语气，详细描述这段视频中的画面内容、人物动作和表情。
-像解说员一样，把视频里发生的故事生动地讲述出来。重点关注：
-1. 人物的肢体语言和面部表情
-2. 场景中的关键道具和动作
-3. 人物之间的互动和张力
+并说出自己的见解
 用中文回答。"""
 
 SUBTITLE_FONT_SIZE = 28
@@ -156,7 +153,11 @@ for i, seg_path in enumerate(segment_paths):
             "content": [{"type": "text", "text": "好的，我已了解前面的画面内容，请提供下一段视频。"}],
         })
 
-    # 当前视频片段
+    # 当前视频片段（带上段号，避免模型重复历史）
+    seg_prompt = ANALYSIS_PROMPT + f"\n\n注意：这是第{i+1}/{total_segments}段（{start_sec:.0f}s-{end_sec:.0f}s），"
+    seg_prompt += "请只描述这段视频中出现的**新画面、新动作、新情节**，"
+    seg_prompt += "不要复述之前已经描述过的内容，不要重复使用之前的标题格式。"
+
     messages.append({
         "role": "user",
         "content": [
@@ -164,7 +165,7 @@ for i, seg_path in enumerate(segment_paths):
                 "type": "video",
                 "video": seg_path,
             },
-            {"type": "text", "text": ANALYSIS_PROMPT},
+            {"type": "text", "text": seg_prompt},
         ],
     })
 
