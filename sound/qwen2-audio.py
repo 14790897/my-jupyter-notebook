@@ -360,9 +360,13 @@ if font_path is None:
     font_path = "/kaggle/working/fonts/SourceHanSansSC-Regular.otf"
     subprocess.run(["wget", "-q", "-O", font_path, font_url], capture_output=True)
     if not os.path.exists(font_path) or os.path.getsize(font_path) < 1000:
-        # 备选: 使用更小的字体
-        font_url = "https://github.com/SilentByte/fonts-noto-sans-cjk/raw/master/NotoSansSC-Regular.ttf"
-        subprocess.run(["wget", "-q", "-O", font_path, font_url], capture_output=True)
+        # 备选: apt 安装系统字体
+        subprocess.run(["apt-get", "install", "-y", "-qq", "fonts-noto-cjk"], capture_output=True)
+        for fp in ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"]:
+            if os.path.exists(fp):
+                font_path = fp
+                break
 print(f"Using font: {font_path}")
 
 pil_font = ImageFont.truetype(font_path, FONT_SIZE)

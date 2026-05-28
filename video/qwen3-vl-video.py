@@ -280,10 +280,18 @@ for fp in font_candidates:
 if font_path is None:
     print("Downloading Chinese font...")
     os.makedirs("/kaggle/working/fonts", exist_ok=True)
-    font_path = "/kaggle/working/fonts/NotoSansSC-Regular.ttf"
-    subprocess.run(["wget", "-q", "-O", font_path,
-        "https://github.com/SilentByte/fonts-noto-sans-cjk/raw/master/NotoSansSC-Regular.ttf"],
+    font_path = "/kaggle/working/fonts/SourceHanSansSC-Regular.otf"
+    ret = subprocess.run(["wget", "-q", "-O", font_path,
+        "https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf"],
         capture_output=True)
+    if ret.returncode != 0 or os.path.getsize(font_path) < 100:
+        # 方案2: apt 安装系统字体
+        subprocess.run(["apt-get", "install", "-y", "-qq", "fonts-noto-cjk"], capture_output=True)
+        for fp in ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"]:
+            if os.path.exists(fp):
+                font_path = fp
+                break
 print(f"Font: {font_path}")
 
 pil_font = ImageFont.truetype(font_path, SUBTITLE_FONT_SIZE)
