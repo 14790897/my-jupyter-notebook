@@ -6,7 +6,7 @@
 # === 配置 ===
 VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 SEGMENT_DURATION = 10  # 每段视频时长(秒)，缩短以降低显存
-MAX_NEW_TOKENS = 512
+MAX_NEW_TOKENS = 2048  # 每段分析生成的最大文本长度，过长可能显存OOM
 OUTPUT_JSON = "/kaggle/working/video_analysis.json"
 VIDEO_FPS = 2  # 切割时降低帧率，减少帧数
 VIDEO_SCALE = "640:-1"  # 缩小分辨率，降低显存
