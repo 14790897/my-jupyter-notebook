@@ -293,8 +293,10 @@ with open(ass_path, "w", encoding="utf-8") as f:
     f.write("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     for r in results:
         start = sec_to_ass(r["start_sec"])
-        end = sec_to_ass(r["end_sec"])
+        end = sec_to_ass(max(r["start_sec"] + 0.1, r["end_sec"] - 0.05))  # 结束时间减0.05s，避免ASS闭区间导致边界重叠
         text = r["text"].replace("\n", "\\N")
+        # ASS Dialogue 中逗号是字段分隔符，需要转义为 \\,
+        text = text.replace(",", "\\,")
         f.write(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}\n")
 
 print(f"ASS subtitle written: {ass_path}")
