@@ -303,7 +303,7 @@ seg_ends = [r["end_sec"] for r in results]
 def get_subtitle_at_time(t):
     """获取当前时刻对应的字幕文本"""
     for i, r in enumerate(results):
-        if seg_starts[i] <= t <= seg_ends[i]:
+        if seg_starts[i] <= t < seg_ends[i]:
             return r["text"]
     return None
 
