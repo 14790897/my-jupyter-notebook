@@ -6,7 +6,7 @@
 # === 配置 ===
 VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 SEGMENT_DURATION = 10  # 每段视频时长(秒)，缩短以降低显存
-MAX_NEW_TOKENS = 256
+MAX_NEW_TOKENS = 512
 OUTPUT_JSON = "/kaggle/working/video_analysis.json"
 VIDEO_FPS = 2  # 切割时降低帧率，减少帧数
 VIDEO_SCALE = "640:-1"  # 缩小分辨率，降低显存
@@ -237,36 +237,9 @@ for seg in results:
 
 # %% [code]
 print("=== Step 6: 将评论字幕叠加到视频 ===")
-import cv2
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import bisect
+import os
 
-# 获取原视频元信息
-probe_v = subprocess.run(
-    ["ffprobe", "-v", "quiet", "-print_format", "json",
-     "-show_streams", "-select_streams", "v:0", VIDEO_PATH],
-    capture_output=True, text=True
-)
-vs = json.loads(probe_v.stdout)["streams"][0]
-w = int(vs["width"])
-h = int(vs["height"])
-fps_num, fps_den = map(int, vs["r_frame_rate"].split("/"))
-vid_fps = fps_num / fps_den
-
-# 用 ffmpeg 解码为 raw BGR24（避免 OpenCV 解码兼容性问题）
-raw_path = "/kaggle/working/video_raw.rgb"
-subprocess.run([
-    "ffmpeg", "-y", "-i", VIDEO_PATH,
-    "-f", "rawvideo", "-pix_fmt", "bgr24",
-    "-v", "quiet", raw_path
-], capture_output=True)
-
-frame_bytes = w * h * 3
-actual_frames = os.path.getsize(raw_path) // frame_bytes
-print(f"Video: {w}x{h}, {vid_fps:.2f} fps, {actual_frames} frames")
-
-# 加载中文字体
+# 字体准备（ffmpeg ass filter 需要本地字体路径）
 font_candidates = [
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
@@ -284,8 +257,7 @@ if font_path is None:
     ret = subprocess.run(["wget", "-q", "-O", font_path,
         "https://github.com/adobe-fonts/source-han-sans/raw/release/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf"],
         capture_output=True)
-    if ret.returncode != 0 or os.path.getsize(font_path) < 100:
-        # 方案2: apt 安装系统字体
+    if ret.returncode != 0 or os.path.getsize(font_path) < 1000:
         subprocess.run(["apt-get", "install", "-y", "-qq", "fonts-noto-cjk"], capture_output=True)
         for fp in ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
                     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"]:
@@ -294,112 +266,61 @@ if font_path is None:
                 break
 print(f"Font: {font_path}")
 
-pil_font = ImageFont.truetype(font_path, SUBTITLE_FONT_SIZE)
+# 生成 ASS 字幕文件（支持中文描边、自动换行、位置控制）
+ass_path = "/kaggle/working/subtitles.ass"
+font_name = os.path.splitext(os.path.basename(font_path))[0]
 
-# 字幕时间线：每段的起止时间
-seg_starts = [r["start_sec"] for r in results]
-seg_ends = [r["end_sec"] for r in results]
+def sec_to_ass(t):
+    h = int(t // 3600)
+    m = int((t % 3600) // 60)
+    s = t % 60
+    return f"{h}:{m:02d}:{s:05.2f}"
 
-def get_subtitle_at_time(t):
-    """获取当前时刻对应的字幕文本"""
-    for i, r in enumerate(results):
-        if seg_starts[i] <= t < seg_ends[i]:
-            return r["text"]
-    return None
+with open(ass_path, "w", encoding="utf-8") as f:
+    f.write("[Script Info]\n")
+    f.write("ScriptType: v4.00+\n")
+    f.write(f"PlayResX: 1440\nPlayResY: 1080\n")
+    f.write("WrapStyle: 1\n\n")  # WrapStyle=1: 自动换行
+    f.write("[V4+ Styles]\n")
+    f.write("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
+            "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
+            "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
+    # Alignment=8: 顶部居中; OutlineColour=黑色描边; PrimaryColour=黄色
+    f.write(f"Style: Default,{font_name},{SUBTITLE_FONT_SIZE},"
+            f"&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+            f"0,0,0,0,100,100,0,0,1,2,0,8,30,30,50,1\n\n")
+    f.write("[Events]\n")
+    f.write("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+    for r in results:
+        start = sec_to_ass(r["start_sec"])
+        end = sec_to_ass(r["end_sec"])
+        text = r["text"].replace("\n", "\\N")
+        f.write(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}\n")
 
-def put_text_pil(frame_bgr, text):
-    """用 PIL 绘制带描边的中文文字（自动换行）"""
-    img_pil = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
-    draw = ImageDraw.Draw(img_pil)
+print(f"ASS subtitle written: {ass_path}")
 
-    # 自动换行
-    max_width = w - 40
-    dummy_bbox = draw.textbbox((0, 0), "测", font=pil_font)
-    char_w = dummy_bbox[2] - dummy_bbox[0]
-    line_h = dummy_bbox[3] - dummy_bbox[1]
-    chars_per_line = max(1, int(max_width / char_w)) if char_w > 0 else 20
-
-    lines = [text[i:i + chars_per_line] for i in range(0, len(text), chars_per_line)]
-    total_h = line_h * len(lines)
-
-    if SUBTITLE_POSITION == "bottom":
-        start_y = h - 40 - total_h
-    elif SUBTITLE_POSITION == "top":
-        start_y = 100
-    else:
-        start_y = (h - total_h) // 2
-
-    for line_idx, line in enumerate(lines):
-        line_bbox = draw.textbbox((0, 0), line, font=pil_font)
-        line_w = line_bbox[2] - line_bbox[0]
-        text_x = max(0, (w - line_w) // 2)
-        text_y = start_y + line_idx * line_h
-
-        # 描边
-        for dx in range(-SUBTITLE_STROKE_WIDTH, SUBTITLE_STROKE_WIDTH + 1):
-            for dy in range(-SUBTITLE_STROKE_WIDTH, SUBTITLE_STROKE_WIDTH + 1):
-                if dx == 0 and dy == 0:
-                    continue
-                draw.text((text_x + dx, text_y + dy), line,
-                          fill=SUBTITLE_STROKE_COLOR, font=pil_font)
-        # 正文
-        draw.text((text_x, text_y), line, fill=SUBTITLE_FONT_COLOR, font=pil_font)
-
-    return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-
-# 逐帧渲染
-temp_output = "/kaggle/working/temp_subtitled.mp4"
-writer = cv2.VideoWriter(temp_output, cv2.VideoWriter_fourcc(*"mp4v"), vid_fps, (w, h))
-
-print("Rendering frames...")
-processed = 0
-with open(raw_path, "rb") as f:
-    for frame_idx in range(actual_frames):
-        raw_data = f.read(frame_bytes)
-        if len(raw_data) < frame_bytes:
-            break
-
-        frame = np.frombuffer(raw_data, dtype=np.uint8).reshape((h, w, 3)).copy()
-        t = frame_idx / vid_fps
-        subtitle = get_subtitle_at_time(t)
-
-        if subtitle:
-            frame = put_text_pil(frame, subtitle)
-
-        writer.write(frame)
-        processed += 1
-        if processed % 500 == 0:
-            print(f"  {processed}/{actual_frames} frames ({processed/actual_frames*100:.1f}%)")
-
-writer.release()
-os.remove(raw_path)
-print(f"Temp video: {temp_output} ({processed} frames)")
-
-# %% [markdown]
-# # Step 7: 合成最终视频（叠加原音频）
-
-# %% [code]
-print("=== Step 7: 合成最终视频 ===")
+# 用 ffmpeg ass filter 直接烧录字幕（含原音频），一步搞定
 final_output = "/kaggle/working/liuhuaqiang-vl-subtitled.mp4"
-subprocess.run([
+ret = subprocess.run([
     "ffmpeg", "-y",
-    "-i", temp_output,
     "-i", VIDEO_PATH,
-    "-c:v", "libx264", "-preset", "medium",
-    "-c:a", "aac", "-shortest",
-    "-map", "0:v:0", "-map", "1:a:0",
-    "-v", "quiet",
+    "-vf", f"ass={ass_path}",
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-c:a", "aac",
     final_output
-], capture_output=True)
-os.remove(temp_output)
-final_size = os.path.getsize(final_output) / 1024 / 1024
-print(f"Final: {final_output} ({final_size:.1f} MB)")
+], capture_output=True, text=True)
+
+if ret.returncode != 0:
+    print("ffmpeg stderr:", ret.stderr[-2000:])
+else:
+    final_size = os.path.getsize(final_output) / 1024 / 1024
+    print(f"Final: {final_output} ({final_size:.1f} MB)")
 
 # %% [markdown]
-# # Step 8: 压缩并展示
+# # Step 7: 压缩并展示
 
 # %% [code]
-print("=== Step 8: 压缩并展示结果 ===")
+print("=== Step 7: 压缩并展示结果 ===")
 from IPython.display import Video as IPVideo, display
 
 compressed_output = "/kaggle/working/liuhuaqiang-vl-compressed.mp4"
