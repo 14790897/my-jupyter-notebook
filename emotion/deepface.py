@@ -333,6 +333,21 @@ def process_video_every_frame(input_path, output_path):
             
             # 更新全局轨迹（丢弃当前帧未检测到的人脸）
                 face_tracks = current_tracks
+                
+                # --- 在左下角显示当前表情状态 ---
+                if current_tracks:
+                    emotion_weights = {}
+                    for em, score in current_tracks[0]['emotions']:
+                        emotion_weights[em] = emotion_weights.get(em, 0) + score
+                    main_emotion = max(emotion_weights, key=emotion_weights.get)
+                    cn_emotion = EMOTION_DICT.get(main_emotion, '未知')
+                    
+                    bottom_left_x = 20
+                    bottom_left_y = height - 30
+                    frame = cv2_add_chinese_text_with_bg(frame, f"当前情绪: {cn_emotion}", 
+                                                          (bottom_left_x, bottom_left_y), 
+                                                          text_color=EMOTION_COLORS.get(main_emotion, (255, 255, 255)), 
+                                                          text_size=24, bg_alpha=0.7)
                             
         except Exception as e:
             print(f"第 {frame_count} 帧报错: {e}")
