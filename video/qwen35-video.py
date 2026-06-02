@@ -181,7 +181,15 @@ for i, seg_path in enumerate(segment_paths):
     inputs = inputs.to(model.device)
 
     with torch.no_grad():
-        generated_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+        generated_ids = model.generate(
+            **inputs,
+            max_new_tokens=MAX_NEW_TOKENS,
+            temperature=0.6,  # thinking mode: 0.6
+            top_p=0.95,  # thinking mode: 0.95
+            top_k=20,  # thinking mode: 20
+            min_p=0,  # thinking mode: 0
+            # presence_penalty=1.5,  # 减少重复
+        )
 
     generated_ids_trimmed = [
         out_ids[len(in_ids):]
