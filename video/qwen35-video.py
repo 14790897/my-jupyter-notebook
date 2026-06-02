@@ -11,7 +11,7 @@
 # === 配置 ===
 VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 SEGMENT_DURATION = 10  # 每段视频时长(秒)
-MAX_NEW_TOKENS = 4096
+MAX_NEW_TOKENS = 2048
 OUTPUT_JSON = "/kaggle/working/video_analysis_35.json"
 MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止上下文过长
 TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
@@ -176,6 +176,7 @@ for i, seg_path in enumerate(segment_paths):
         add_generation_prompt=True,
         return_dict=True,
         return_tensors="pt",
+        enable_thinking=True,  # 启用思考提示，帮助模型更好地组织回答 
     )
     inputs = inputs.to(model.device)
 
@@ -191,7 +192,9 @@ for i, seg_path in enumerate(segment_paths):
     )[0]
 
     print(f"Output: {output_text}")
-
+    # 过滤思考内容：Qwen3 会输出 <think...>...</think|>，不能写入字幕和历史
+    import re
+    output_text = re.sub(r"\.{2,}.*</think>", "", output_text).strip()
     results.append({
         "segment": i,
         "start_sec": start_sec,
