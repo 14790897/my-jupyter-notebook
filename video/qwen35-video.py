@@ -1,7 +1,11 @@
 # %% [markdown]
 # # Qwen3.5 视频理解：刘华强买瓜
 # 使用 Qwen3.5-9B 对视频进行视觉理解分析
-!pip install -U trl peft transformers datasets accelerate bitsandbytes
+# %% [code]
+
+!pip install -U trl peft  datasets accelerate bitsandbytes
+### 在我提了issue之后，官方修复了video token 嵌入问题，所以要从源码安装
+!pip install git+https://github.com/huggingface/transformers.git@main
 
 # %% [code]
 # === 配置 ===
@@ -186,7 +190,7 @@ for i, seg_path in enumerate(segment_paths):
         generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
     )[0]
 
-    print(f"Output: {output_text[:200]}...")
+    print(f"Output: {output_text}")
 
     results.append({
         "segment": i,
