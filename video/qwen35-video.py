@@ -13,17 +13,14 @@ VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
 SEGMENT_DURATION = 10  # 每段视频时长(秒)
 MAX_NEW_TOKENS = 2048
 OUTPUT_JSON = "/kaggle/working/video_analysis_35.json"
-MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止上下文过长
+MAX_HISTORY_SEGMENTS = 2  # 只保留最近N段历史，防止上下文过长
 TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
 VIDEO_FPS = 2  # 视频采样帧率
 VIDEO_SCALE = "640:-1"  # 缩小分辨率
 
-ANALYSIS_PROMPT = """请用幽默风趣的语气，详细描述这段视频中的画面内容、人物动作和表情。
-像解说员一样，把视频里发生的故事生动地讲述出来。重点关注：
-1. 人物的肢体语言和面部表情
-2. 场景中的关键道具和动作
-3. 人物之间的互动和张力
-用中文回答。"""
+ANALYSIS_PROMPT = """描述这段视频中的画面内容、人物动作和表情。
+用中文回答。
+回答不超过1000字"""
 
 SUBTITLE_FONT_SIZE = 24
 SUBTITLE_CHARS_PER_LINE = 25  # 每行最多中文字符数
@@ -184,7 +181,7 @@ for i, seg_path in enumerate(segment_paths):
         generated_ids = model.generate(
             **inputs,
             max_new_tokens=MAX_NEW_TOKENS,
-            temperature=0.6,  # thinking mode: 0.6
+            temperature=0.9,  # thinking mode: 0.6
             top_p=0.95,  # thinking mode: 0.95
             top_k=20,  # thinking mode: 20
             min_p=0,  # thinking mode: 0
@@ -200,9 +197,9 @@ for i, seg_path in enumerate(segment_paths):
     )[0]
 
     print(f"Output: {output_text}")
-    # 过滤思考内容：Qwen3 会输出 <think...>...</think|>，不能写入字幕和历史
+    # 过滤思考内容：</think>之前的 ，不能写入字幕和历史
     import re
-    output_text = re.sub(r"\.{2,}.*</think>", "", output_text).strip()
+    output_text = re.sub(r"\.{2,}.*?</think\s*\|?>", "", output_text, flags=re.DOTALL).strip()
     results.append({
         "segment": i,
         "start_sec": start_sec,
