@@ -9,14 +9,14 @@
 
 # %% [code]
 # === 配置 ===
-VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"
+VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4"  # Kaggle 路径，本地测试时改为实际路径
 SEGMENT_DURATION = 10  # 每段视频时长(秒)
 MAX_NEW_TOKENS = 2048
 OUTPUT_JSON = "/kaggle/working/video_analysis_35.json"
 MAX_HISTORY_SEGMENTS = 2  # 只保留最近N段历史，防止上下文过长
 TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
 VIDEO_FPS = 2  # 视频采样帧率
-VIDEO_SCALE = "640:-1"  # 缩小分辨率
+VIDEO_SCALE = "640:-2"  # 缩小分辨率，-2 保证高度为偶数（H.264 要求宽高均为偶数）
 
 ANALYSIS_PROMPT = """描述这段视频中的画面内容、人物动作和表情。
 用中文回答。
@@ -82,7 +82,7 @@ segment_paths = []
 for i in range(total_segments):
     start = i * SEGMENT_DURATION
     seg_path = os.path.join(seg_dir, f"seg_{i:03d}.mp4")
-    subprocess.run([
+    ret = subprocess.run([
         "ffmpeg", "-y",
         "-ss", str(start),
         "-i", VIDEO_PATH,
@@ -90,10 +90,11 @@ for i in range(total_segments):
         "-vf", f"fps={VIDEO_FPS},scale={VIDEO_SCALE}",
         "-c:v", "libx264", "-preset", "ultrafast",
         "-an",
-        "-v", "quiet",
         seg_path
-    ], capture_output=True)
-    size_mb = os.path.getsize(seg_path) / 1024 / 1024
+    ], capture_output=True, text=True)
+    if ret.returncode != 0:
+        print(f"  [ERROR] Segment {i} ffmpeg failed:\n{ret.stderr[-500:]}")
+    size_mb = os.path.getsize(seg_path) / 1024 / 1024 if os.path.exists(seg_path) else 0
     segment_paths.append(seg_path)
     print(f"  Segment {i}: [{start:.0f}s - {min(start + SEGMENT_DURATION, duration):.0f}s] {size_mb:.1f} MB")
 

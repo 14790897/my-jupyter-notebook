@@ -10,7 +10,7 @@ TEST_SEGMENTS = 0  # 只处理前N段，测试用（设为 None 处理全部）
 MAX_NEW_TOKENS = 2048  # 每段分析生成的最大文本长度，过长可能显存OOM
 OUTPUT_JSON = "/kaggle/working/video_analysis.json"
 VIDEO_FPS = 2  # 切割时降低帧率，减少帧数
-VIDEO_SCALE = "640:-1"  # 缩小分辨率，降低显存
+VIDEO_SCALE = "640:-2"  # 缩小分辨率，-2 保证高度为偶数（H.264 要求宽高均为偶数）
 MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止显存随对话增长而OOM
 
 ANALYSIS_PROMPT = """请用幽默风趣的语气，详细描述这段视频中的画面内容、人物动作和表情。
