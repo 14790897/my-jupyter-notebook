@@ -1,4 +1,41 @@
-# %% [markdown] 
+# %% [markdown]
+# # Gemma-4 视频理解：实验视频分段分析与汇总
+# 
+# 对20分钟实验视频进行分段处理：
+# 1. 使用ffmpeg将视频分段
+# 2. 逐段让Gemma-4总结内容
+# 3. 最后汇总所有分段总结，生成完整实验流程总结
+
+# %% [code]
+# === 配置 ===
+VIDEO_PATH = "/kaggle/input/datasets/liuweiq/experiments/Ni-HHTP.mp4"  # 实验视频路径
+SEGMENT_DURATION = 120  # 每段视频时长(秒)，20分钟=1200秒，分成10段
+MAX_NEW_TOKENS = 2048  # 每段分析生成的最大文本长度
+OUTPUT_JSON = "/kaggle/working/video_segments_summary.json"
+MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止上下文过长
+VIDEO_FPS = 2  # 视频采样帧率
+VIDEO_SCALE = "640:-2"  # 缩小分辨率
+MIN_SEGMENT_DURATION = 1.0  # 最少有效时长
+
+ANALYSIS_PROMPT = """请详细描述这段视频中的实验内容、操作步骤、观察到的现象和数据。
+包括：
+- 实验目的和原理
+- 使用的设备和材料
+- 具体操作步骤
+- 观察到的结果和现象
+- 数据记录和分析
+
+用中文回答，语言要专业、准确。"""
+
+FINAL_SUMMARY_PROMPT = """以下是一段20分钟实验视频的分段总结，请你汇总这些内容，生成一份完整的实验流程总结报告。
+
+要求：
+1. 梳理整个实验的逻辑流程和步骤
+2. 提取关键实验数据和观察结果
+3. 分析实验原理和方法
+4. 总结实验结论
+
+请用结构化的方式输出，语言专业、条理清晰。"""
 
 # %% [code] 
 %%capture
@@ -9,70 +46,234 @@ except: _numpy = "numpy"; _pil = "pillow"
     unsloth "unsloth_zoo>=2026.4.6" transformers==5.5.0 torchcodec timm
 
 # %% [markdown]
-# ### Unsloth
-# 
-# `FastModel` supports loading nearly any model now! This includes Vision and Text models!
+# ### 安装依赖和检查工具
+
+# %% [code]
+import subprocess
+result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+print(f"ffmpeg: {'OK' if result.returncode == 0 else 'NOT FOUND'}")
+
+# %% [markdown]
+# ### Unsloth - 加载 Gemma-4 模型
 
 # %% [code] 
 from unsloth import FastModel
 import torch
+import json
+import os
+import gc
 
 gemma4_models = [
-    # Gemma-4 instruct models:
     "unsloth/gemma-4-E2B-it",
     "unsloth/gemma-4-E4B-it",
     "unsloth/gemma-4-31B-it",
     "unsloth/gemma-4-26B-A4B-it",
-    # Gemma-4 base models:
     "unsloth/gemma-4-E2B",
     "unsloth/gemma-4-E4B",
     "unsloth/gemma-4-31B",
     "unsloth/gemma-4-26B-A4B",
-] # More models at https://huggingface.co/unsloth
+]
 
 model, tokenizer = FastModel.from_pretrained(
     model_name = "unsloth/gemma-4-31B-it",
-    dtype = None, # None for auto detection
-    max_seq_length = 38192, # Choose any for long context!
-    load_in_4bit = True,  # 4 bit quantization to reduce memory
-    full_finetuning = False, # [NEW!] We have full finetuning now!
-    # token = "YOUR_HF_TOKEN", # HF Token for gated models
-    device_map = "balanced", # Use 2x Tesla T4s on Kaggle
+    dtype = None,
+    max_seq_length = 38192,
+    load_in_4bit = True,
+    full_finetuning = False,
+    device_map = "balanced",
 )
 
-# %% [markdown] {"id":"ixr4dyTHVIcI"}
-# # Gemma 4 can process Text, Vision and Audio!
-# 
-# Let's first experience how Gemma 4 can handle multimodal inputs. We use Gemma 4's recommended settings of `temperature = 1.0, top_p = 0.95, top_k = 64`
+# %% [markdown]
+# # Step 1: 获取视频信息并分段
 
-# %% [code] 
-# Helper function for inference
-def do_gemma_4_inference(messages, max_new_tokens = 128):
-    _ = model.generate(
+# %% [code]
+print("=== Step 1: 获取视频信息并分段 ===")
+
+probe = subprocess.run(
+    ["ffprobe", "-v", "quiet", "-print_format", "json",
+     "-show_streams", "-select_streams", "v:0", VIDEO_PATH],
+    capture_output=True, text=True
+)
+probe_data = json.loads(probe.stdout)
+vstream = probe_data["streams"][0]
+width = int(vstream["width"])
+height = int(vstream["height"])
+fps_str = vstream.get("r_frame_rate", "30/1")
+fps_num, fps_den = map(int, fps_str.split("/"))
+fps = fps_num / fps_den
+
+duration_probe = subprocess.run(
+    ["ffprobe", "-v", "quiet", "-print_format", "json",
+     "-show_format", VIDEO_PATH],
+    capture_output=True, text=True
+)
+duration = float(json.loads(duration_probe.stdout)["format"]["duration"])
+
+total_segments = int(duration / SEGMENT_DURATION) + (1 if duration % SEGMENT_DURATION > 0 else 0)
+
+def get_segment_actual_duration(seg_start, seg_dur, total_dur):
+    actual = min(seg_start + seg_dur, total_dur) - seg_start
+    return actual
+
+print(f"Video: {width}x{height}, {fps:.2f} fps, {duration:.1f}s")
+print(f"Segments: {total_segments} (each {SEGMENT_DURATION}s)")
+
+seg_dir = "/kaggle/working/video_segments"
+os.makedirs(seg_dir, exist_ok=True)
+
+segment_paths = []
+for i in range(total_segments):
+    start = i * SEGMENT_DURATION
+    actual_dur = get_segment_actual_duration(start, SEGMENT_DURATION, duration)
+    if actual_dur < MIN_SEGMENT_DURATION:
+        print(f"  Segment {i}: skipped (only {actual_dur:.1f}s)")
+        continue
+    seg_path = os.path.join(seg_dir, f"seg_{i:03d}.mp4")
+    ret = subprocess.run([
+        "ffmpeg", "-y",
+        "-ss", str(start),
+        "-i", VIDEO_PATH,
+        "-t", str(actual_dur),
+        "-vf", f"fps={VIDEO_FPS},scale={VIDEO_SCALE}",
+        "-c:v", "libx264", "-preset", "ultrafast",
+        "-an",
+        seg_path
+    ], capture_output=True, text=True)
+    if ret.returncode != 0:
+        print(f"  [ERROR] Segment {i} ffmpeg failed:\n{ret.stderr[-500:]}")
+    size_mb = os.path.getsize(seg_path) / 1024 / 1024 if os.path.exists(seg_path) else 0
+    segment_paths.append(seg_path)
+    print(f"  Segment {i}: [{start:.0f}s - {min(start + SEGMENT_DURATION, duration):.0f}s] {size_mb:.1f} MB")
+
+# %% [markdown]
+# # Step 2: 逐段分析视频
+
+# %% [code]
+print("\n=== Step 2: 逐段分析视频 ===")
+
+from transformers import TextStreamer
+
+def do_gemma_4_inference(messages, max_new_tokens=128, stream=True):
+    streamer = TextStreamer(tokenizer, skip_prompt=True) if stream else None
+    generated_ids = model.generate(
         **tokenizer.apply_chat_template(
             messages,
-            add_generation_prompt = True, # Must add for generation
-            tokenize = True,
-            return_dict = True,
-            return_tensors = "pt",
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
         ).to("cuda"),
-        max_new_tokens = max_new_tokens,
-        use_cache = True,
-        temperature = 1.0, top_p = 0.95, top_k = 64,
-        streamer = TextStreamer(tokenizer, skip_prompt = True),
+        max_new_tokens=max_new_tokens,
+        use_cache=True,
+        temperature=1.0, top_p=0.95, top_k=64,
+        streamer=streamer,
     )
+    generated_ids_trimmed = generated_ids[0][len(tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")[0]):]
+    output_text = tokenizer.decode(generated_ids_trimmed, skip_special_tokens=True)
+    return output_text
 
-# %% [markdown] 
-# Let's make a poem about sloths!
+results = []
+history_texts = []
 
-# %% [code] 
-# 自动模式：一行填视频路径，内部自动抽帧
-messages = [{
-    "role":"user",
-    "content":[
-        {"type":"video", "video":"/kaggle/input/datasets/liuweiq/experiments/Ni-HHTP.mp4"}, # 视频在前，自动1fps采样
-        {"type":"text", "text":"描述视频内容，不少于2000字"}    # 文本在后
+for i, seg_path in enumerate(segment_paths):
+    start_sec = i * SEGMENT_DURATION
+    end_sec = min((i + 1) * SEGMENT_DURATION, duration)
+    actual_dur = end_sec - start_sec
+    if actual_dur < MIN_SEGMENT_DURATION:
+        print(f"\n--- Segment {i+1}/{total_segments} SKIP (only {actual_dur:.1f}s) ---")
+        continue
+    print(f"\n--- Segment {i+1}/{total_segments} [{start_sec:.0f}s - {end_sec:.0f}s] ---")
+
+    if not os.path.exists(seg_path) or os.path.getsize(seg_path) < 1024:
+        print(f"  [SKIP] File missing or too small: {seg_path}")
+        continue
+
+    messages = []
+
+    if history_texts:
+        for prev_text in history_texts:
+            messages.append({
+                "role": "assistant",
+                "content": prev_text,
+            })
+        messages.append({
+            "role": "user",
+            "content": "以上是之前视频片段的描述历史，请结合上下文继续描述下一段。",
+        })
+        messages.append({
+            "role": "assistant",
+            "content": "好的，我已了解前面的内容，请提供下一段视频。",
+        })
+
+    seg_prompt = f"这是第{i+1}/{total_segments}段（{start_sec:.0f}s-{end_sec:.0f}s），请只描述新内容。\n{ANALYSIS_PROMPT}"
+
+    messages.append({
+        "role": "user",
+        "content": [
+            {"type": "video", "video": seg_path},
+            {"type": "text", "text": seg_prompt},
+        ],
+    })
+
+    output_text = do_gemma_4_inference(messages, max_new_tokens=MAX_NEW_TOKENS, stream=True)
+    print(f"\nSegment {i+1} Summary:\n{output_text}\n")
+
+    results.append({
+        "segment": i,
+        "start_sec": start_sec,
+        "end_sec": end_sec,
+        "text": output_text,
+    })
+    history_texts.append(output_text)
+
+    if len(history_texts) > MAX_HISTORY_SEGMENTS:
+        history_texts = history_texts[-MAX_HISTORY_SEGMENTS:]
+
+    del messages
+    torch.cuda.empty_cache()
+    gc.collect()
+
+print(f"\nAll {len(results)} segments analyzed.")
+
+with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+    json.dump(results, f, ensure_ascii=False, indent=2)
+print(f"Results saved to {OUTPUT_JSON}")
+
+# %% [markdown]
+# # Step 3: 汇总所有分段总结，生成完整实验流程报告
+
+# %% [code]
+print("\n=== Step 3: 生成完整实验流程总结 ===")
+
+all_segment_texts = "\n\n".join([f"【第{i+1}段 ({r['start_sec']:.0f}s-{r['end_sec']:.0f}s)】\n{r['text']}" for i, r in enumerate(results)])
+
+summary_messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": FINAL_SUMMARY_PROMPT + "\n\n--- 分段总结开始 ---\n" + all_segment_texts + "\n\n--- 分段总结结束 ---\n\n请生成完整的实验流程总结报告。"}
     ]
 }]
-# 后续照常processor+generate
-do_gemma_4_inference(messages, max_new_tokens = 8192)
+
+print("Generating final summary...\n")
+final_summary = do_gemma_4_inference(summary_messages, max_new_tokens=4096, stream=True)
+
+print("\n" + "="*80)
+print("完整实验流程总结报告")
+print("="*80)
+print(final_summary)
+
+# 保存最终总结
+with open("/kaggle/working/final_experiment_summary.txt", "w", encoding="utf-8") as f:
+    f.write(final_summary)
+print(f"\nFinal summary saved to /kaggle/working/final_experiment_summary.txt")
+
+# %% [markdown]
+# # Step 4: 释放显存
+
+# %% [code]
+print("\n=== Step 4: 释放显存 ===")
+del model
+del tokenizer
+torch.cuda.empty_cache()
+gc.collect()
+print(f"GPU memory freed. CUDA allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
