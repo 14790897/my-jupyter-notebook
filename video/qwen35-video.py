@@ -13,10 +13,11 @@ VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-big.mp4" 
 SEGMENT_DURATION = 10  # 每段视频时长(秒)
 MAX_NEW_TOKENS = 2048
 OUTPUT_JSON = "/kaggle/working/video_analysis_35.json"
-MAX_HISTORY_SEGMENTS = 2  # 只保留最近N段历史，防止上下文过长
+MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止上下文过长
 TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
 VIDEO_FPS = 2  # 视频采样帧率
 VIDEO_SCALE = "640:-2"  # 缩小分辨率，-2 保证高度为偶数（H.264 要求宽高均为偶数）
+MIN_SEGMENT_DURATION = 1.0  # 最少有效时长，少于此值跳过（防末尾空段）
 
 ANALYSIS_PROMPT = """描述这段视频中的画面内容、人物动作和表情。
 用中文回答。
@@ -71,6 +72,11 @@ total_segments = int(duration / SEGMENT_DURATION) + (1 if duration % SEGMENT_DUR
 if TEST_SEGMENTS:
     total_segments = min(total_segments, TEST_SEGMENTS)
 
+# 预计算每段的实际时长，过滤掉末尾时长为 0 的空段
+def get_segment_actual_duration(seg_start, seg_dur, total_dur):
+    actual = min(seg_start + seg_dur, total_dur) - seg_start
+    return actual
+
 print(f"Video: {width}x{height}, {fps:.2f} fps, {duration:.1f}s")
 print(f"Segments: {total_segments} (each {SEGMENT_DURATION}s)")
 
@@ -81,12 +87,16 @@ os.makedirs(seg_dir, exist_ok=True)
 segment_paths = []
 for i in range(total_segments):
     start = i * SEGMENT_DURATION
+    actual_dur = get_segment_actual_duration(start, SEGMENT_DURATION, duration)
+    if actual_dur < MIN_SEGMENT_DURATION:
+        print(f"  Segment {i}: skipped (only {actual_dur:.1f}s)")
+        continue
     seg_path = os.path.join(seg_dir, f"seg_{i:03d}.mp4")
     ret = subprocess.run([
         "ffmpeg", "-y",
         "-ss", str(start),
         "-i", VIDEO_PATH,
-        "-t", str(SEGMENT_DURATION),
+        "-t", str(actual_dur),
         "-vf", f"fps={VIDEO_FPS},scale={VIDEO_SCALE}",
         "-c:v", "libx264", "-preset", "ultrafast",
         "-an",
@@ -134,7 +144,16 @@ history_texts = []
 for i, seg_path in enumerate(segment_paths):
     start_sec = i * SEGMENT_DURATION
     end_sec = min((i + 1) * SEGMENT_DURATION, duration)
+    actual_dur = end_sec - start_sec
+    if actual_dur < MIN_SEGMENT_DURATION:
+        print(f"\n--- Segment {i+1}/{total_segments} SKIP (only {actual_dur:.1f}s) ---")
+        continue
     print(f"\n--- Segment {i+1}/{total_segments} [{start_sec:.0f}s - {end_sec:.0f}s] ---")
+
+    # 防御：跳过空文件（ffmpeg 切割末尾时可能产生 0 字节文件）
+    if not os.path.exists(seg_path) or os.path.getsize(seg_path) < 1024:
+        print(f"  [SKIP] File missing or too small: {seg_path}")
+        continue
 
     # 构建消息
     messages = []
@@ -352,3 +371,59 @@ subprocess.run([
 from IPython.display import Video
 display(Video(compressed, embed=True))
 print("=== Done ===")
+
+# %% [markdown]
+
+# # Step 8: 和商业化模型进行对比
+
+# %% [markdown]
+
+# ## Qwen3.5-Omni-Plus
+https://bailian.console.aliyun.com/cn-beijing?spm=5176.42028462.nav-v2-dropdown-menu-0.d_main_2_0.fd79154aKzcKqT&tab=model&scm=20140722.M_10944401._.V_1#/efm/model_experience_center/multimodal/text-chat?modelId=qwen3.5-omni-plus
+# %% [markdown]
+
+本视频以一家便利店为背景，展开了一场充满幽默和反转的“抢劫”喜剧小短剧。以下分镜头详尽解说：
+
+【00:00.000 – 00:02.367】画面开场为竖屏格式。镜头静止，对准天花板角落的一面凸面安防镜。镜中反射出店内主通道、货架及红色收银台。一名男子身穿黑色上衣、白色围裙正站在柜台后。此时，背景音乐响起——印度尼西亚电子舞曲（DJ remix），节拍明快，合成器音色明亮。女声吟唱一句印尼语歌词：“…ada yang baru, kalau ngana rindu, coba dengar bilang…”。店内的荧光灯营造出冷色调环境光，一切显得平静而日常。
+
+【00:02.367 –00:05.400】 镜头切至收银员正面中景（胸以上）。他皮肤黝黑，留有短发和胡须，双手举过头顶作投降状，脸上显出无奈与顺从。背景货架上摆满Advil等药品，商品色彩杂乱。音乐节奏持续，电子底鼓每拍都强烈敲击。3. 【00:05.400 –00:09.467】同一演员突然换装成“劫匪”。他穿黑色T恤、战术背心（胸前有白字“TAKEDA”）、黑色手套，手持一把深色半自动手枪，表情由紧张转为自信微笑。镜头采用手持拍摄，轻微晃动，贴近其上半身；随后特写聚焦于枪口朝下的手枪，突出动作夸张感。音乐继续播放，无对白或环境音。4. 【00:09.467 –00:13.333】画面回切到收银员，他弯腰伸手进入收银机下方抽屉。接着，他迅速将大量一美元钞票堆放在红色柜台上，用双手聚拢整理，动作滑稽夸张。音乐重低音愈发明显，气氛愈发欢快。
+
+【00:13.333 –00:17.867】“劫匪”再次现身，但已穿上沙色防弹衣，手里多了一个白色塑料袋。他一边挥舞袋子，一边在货架间蹦跳前进，表情欣喜若狂。头顶悬挂着红色Budweiser横幅，强化超市氛围。音乐中的女歌手重复前句歌词，电子音效点缀其间。
+
+【00:17.867 –00:20.433】新角色登场：另一名男子身着全黑特警装备（长袖衫、长裤、战术靴），戴护目镜，手持黑色步枪。他压低身体，沿过道快速推进，动作戏剧化。镜头跟随，略带运动模糊，增加紧迫感。7. 【00:20.433 –00:22.133】收银员第三次出现，依旧高举双手，表情呆滞困惑，仿佛对眼前混乱感到不解。音乐节奏依然未停。8. 【00:22.133 –00:28.167】劫匪回到柜台前，双手抓着大把现金，满脸得意。突然门口灯光变暗，一个穿着肌肉质感灰色蝙蝠侠战衣、斗篷飘动的人物缓缓步入。劫匪的笑容瞬间消失，表情转为震惊。9. 【00:28.167 –00:33.933】 劫匪放下钞票，双手摊开做出“这是什么情况”的动作。镜头快速切到沙色防弹衣劫匪和黑衣特警，两人各自露出惊讶表情，仿佛被突如其来的超级英雄震慑。10. 【00:33.933 – 00:37.200】劫匪与蝙蝠侠对峙。蝙蝠侠背对镜头，劫匪则手足无措地摆动双手，试图解释。镜头采用手持跟拍，略有不稳。此时，音乐中加入一段男声说唱：“Ada di Papua, ada juga di Irian Jaya.”，节奏鲜明。
+
+【00:37.200 –00:44.367】 收银员忽然面带灿烂笑容，举起双手挥动，仿佛欢迎英雄到来。紧接着，镜头近距离捕捉蝙蝠侠的手部细节——黑色手套紧握拳头，金色腰带显眼。12. 【00:44.367 –00:50.333】劫匪脸部特写，先是一副茫然，随即眉头紧锁，咬牙愤怒。镜头再转到蝙蝠侠，其头盔双眼发出红光，气氛骤然紧张。
+
+【00:50.333 – 00:53.567】门口再度亮起炫目红光，另一位身穿蓝红相间紧身衣、肩部饰有金色星星的角色走入店内，双眼也闪烁红光。劫匪见状立刻抱头蹲下，表现出彻底崩溃。14. 【00:53.567 –01:02.033】镜头特写新角色面部：眼神凶狠，红光照耀。接着快速剪辑之前片段——劫匪持枪、收银员数钱、沙色防弹衣劫匪跳舞——形成快节奏蒙太奇，配乐高潮部分反复吟唱“Coba dengar bilang”，加强戏谑感。
+
+【01:02.033 –01:21.533】 最后段落将之前所有关键动作循环播放：收银员疯狂撒钞票，两个劫匪交替出现，特警奔跑，收银员举手，劫匪拿钱，最终定格在他低头看钞票的画面。音乐渐弱直至结束，整个视频以喜剧方式收场，荒诞又带点讽刺。总的来说，这段短视频通过快速剪辑、角色扮演、流行电子乐和夸张表演，营造出一场毫无逻辑却极具娱乐性的“抢劫大战”，融合了网络模因文化与超级英雄元素，使观众在笑声中体验意外反转的快感。
+# %% [markdown]
+
+# ## Gemini-3.1-Pro 网页版
+
+# %% [markdown]
+
+🏪 午夜便利店的“奇妙”抢劫案
+伟清，让我们切入第一视角，看看这段令人啼笑皆非的便利店监控录像。准备好，这绝对不是标准意义上的警匪悬疑片。
+
+🕺 第一幕：踩着节拍的“悍匪”
+动感登场：伴随着一首极其洗脑、节奏欢快的印尼神曲《Ngana Rindu》，画面中闯入了几个身穿黑色战术背心、装备齐全的劫匪。
+
+匪夷所思的步伐：他们没有大喊大叫，也没有暴力威吓，而是完全踩着音乐的节拍，在货架间摇曳生姿！他们一边扫荡着货架上的商品，一边保持着极强的身体律动，仿佛便利店一秒变成了午夜派对的舞池。
+
+💸 第二幕：过度配合的收银员
+绝望的散财童子：镜头切给便利店的收银员小哥。面对这场“歌舞青春版”抢劫，他表现出了极其浮夸的惊恐。
+
+主动出击：他满脸生无可恋，手上的动作却毫不含糊，直接从收银机里抓起一把又一把的钞票，疯狂且主动地往劫匪手里塞。那表情配合着肢体动作，仿佛在说：“钱都拿走，求你们别跳了！”
+
+🦇 第三幕：高能反转与天降神兵
+零钞的困惑：带头的劫匪拿着厚厚一沓美钞，开始得意地清点。但他很快发现事情不对——怎么清一色全是一美元的零钞？他抬起头，露出了大大的疑惑。
+
+正义降临：就在劫匪怀疑人生之际，便利店的大门赫然出现了一个充满压迫感的身影——蝙蝠侠！他站在门口扭动脖子，按得指关节咔咔作响，随时准备暴力执法。
+
+深藏功与名：此时，刚刚还满脸惊恐的收银员小哥瞬间切换状态，对着镜头淡定地比了一个“OK”的手势，仿佛一切尽在掌握。
+
+绝望加倍：正当劫匪已经不知所措时，镜头一闪，门口的“救兵”竟然又换成了双眼泛着致命红光的祖国人（Homelander）！劫匪原本疑惑的表情彻底凝固成了绝望。
+
+解说总结：
+这段视频完全是一场荒诞的视听混搭。用最欢快的音乐，演最严肃的抢劫，最后用最意想不到的超级英雄进行降维打击。伟清，这剧情的脑洞和反转，绝对把短视频的娱乐精神发挥到了极致。
