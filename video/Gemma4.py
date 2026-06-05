@@ -194,15 +194,15 @@ for i, seg_path in enumerate(segment_paths):
         for prev_text in history_texts:
             messages.append({
                 "role": "assistant",
-                "content": prev_text,
+                "content": [{"type": "text", "text": prev_text}],
             })
         messages.append({
             "role": "user",
-            "content": "以上是之前视频片段的描述历史，请结合上下文继续描述下一段。",
+            "content": [{"type": "text", "text": "以上是之前视频片段的描述历史，请结合上下文继续描述下一段。"}],
         })
         messages.append({
             "role": "assistant",
-            "content": "好的，我已了解前面的内容，请提供下一段视频。",
+            "content": [{"type": "text", "text": "好的，我已了解前面的内容，请提供下一段视频。"}],
         })
 
     seg_prompt = f"这是第{i+1}/{total_segments}段（{start_sec:.0f}s-{end_sec:.0f}s），请只描述新内容。\n{ANALYSIS_PROMPT}"
