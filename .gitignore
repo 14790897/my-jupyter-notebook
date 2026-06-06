@@ -5,3 +5,4 @@
 *.bmp
 *.tiff
 __pycache__
+.env
