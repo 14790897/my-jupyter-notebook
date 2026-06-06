@@ -9,10 +9,10 @@
 # %% [code]
 # === 配置 ===
 VIDEO_PATH = "/kaggle/input/datasets/liuweiq/experiments/Ni-HHTP.mp4"  # 实验视频路径，本地测试时改为实际路径
-SEGMENT_DURATION = 120  # 每段视频时长(秒)，20分钟=1200秒，分成10段
+SEGMENT_DURATION = 60  # 每段视频时长(秒)，20分钟=1200秒，分成20段
 MAX_NEW_TOKENS = 2048  # 每段分析生成的最大文本长度
 OUTPUT_JSON = "/kaggle/working/video_segments_summary.json"
-MAX_HISTORY_SEGMENTS = 3  # 只保留最近N段历史，防止上下文过长
+MAX_HISTORY_SEGMENTS = 20  # 只保留最近N段历史，防止上下文过长
 TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
 VIDEO_FPS = 2  # 视频采样帧率
 VIDEO_SCALE = "640:-2"  # 缩小分辨率
@@ -35,12 +35,12 @@ FINAL_SUMMARY_PROMPT = """以下是一段实验视频的分段分析总结，请
 
 严格按照以下格式输出，**不要输出任何无关内容**：
 
-## 实验标准表
+## 实验测量数据表
 
-| 实验参数 | 标准值 | 允许范围 | 测量单位 |
+| 测量参数 | 测量值 | 测量单位 | 测量仪器 |
 | --- | --- | --- | --- |
-| 参数1 | 值1 | 范围1 | 单位1 |
-| 参数2 | 值2 | 范围2 | 单位2 |
+| 参数1 | 值1 | 单位1 | 仪器1 |
+| 参数2 | 值2 | 单位2 | 仪器2 |
 
 ## 实验操作流程表
 
