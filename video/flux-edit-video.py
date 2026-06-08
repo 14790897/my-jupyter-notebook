@@ -1,8 +1,9 @@
+import os
+
+import cv2
 import torch
 from diffusers import Flux2KleinPipeline
 from PIL import Image
-import cv2
-import os
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.bfloat16
@@ -12,10 +13,11 @@ pipe.enable_model_cpu_offload()
 
 VIDEO_PATH = "/kaggle/input/datasets/liuweiq/daxiaonailong/liuhuaqiang-small.mp4"
 OUTPUT_DIR = "/kaggle/working/flux_candy_frames"
+TEMP_VIDEO = "/kaggle/working/liuhuaqiang-candy-world_temp.avi"
 OUTPUT_VIDEO = "/kaggle/working/liuhuaqiang-candy-world.mp4"
 
 TEST_MODE = True
-TEST_DURATION = 3
+TEST_DURATION = 10
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -33,7 +35,7 @@ if TEST_MODE:
 else:
     max_frames = total_frames
 
-prompt = "candy world style, sweet colorful candy land, lollipops, candy canes, gumdrops, marshmallows, rainbow colors, whimsical, fantasy, vibrant, sugary landscape"
+prompt = "keep the main subject person unchanged, transform background into candy world style, sweet colorful candy land, lollipops, candy canes, gumdrops, marshmallows, rainbow colors, whimsical fantasy background, vibrant sugary landscape, preserve foreground character"
 
 frame_count = 0
 while cap.isOpened():
@@ -63,7 +65,8 @@ while cap.isOpened():
 cap.release()
 
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter(OUTPUT_VIDEO, fourcc, fps, (512, 512))
+os.makedirs(os.path.dirname(TEMP_VIDEO), exist_ok=True)
+out = cv2.VideoWriter(TEMP_VIDEO, fourcc, fps, (512, 512))
 
 for i in range(frame_count):
     frame_path = os.path.join(OUTPUT_DIR, f"frame_{i:04d}.png")
@@ -72,4 +75,17 @@ for i in range(frame_count):
 
 out.release()
 
+print("正在使用 FFmpeg 合并音频与画面...")
+ffmpeg_cmd = (
+    f"ffmpeg -y "
+    f"-i {TEMP_VIDEO} "
+    f"-i {VIDEO_PATH} "
+    f"-map 0:v:0 -map 1:a:0 "
+    f"-vcodec libx264 -preset ultrafast "
+    f"-c:a copy -shortest "
+    f"{OUTPUT_VIDEO}"
+)
+os.system(ffmpeg_cmd)
+
+os.remove(TEMP_VIDEO)
 print(f"Video saved to {OUTPUT_VIDEO}")
