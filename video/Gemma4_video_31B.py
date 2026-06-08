@@ -8,7 +8,7 @@
 
 # %% [code]
 # === 配置 ===
-VIDEO_PATH = "/kaggle/input/datasets/liuweiq/experiments/Ni-HHTP.mp4"  # 实验视频路径，本地测试时改为实际路径
+VIDEO_PATH = "/kaggle/input/datasets/liuweiq/experiments/Ni-HHTP_with_subtitles.mp4"  # 实验视频路径，本地测试时改为实际路径
 SEGMENT_DURATION = 60  # 每段视频时长(秒)，20分钟=1200秒，分成20段
 MAX_NEW_TOKENS = 2048  # 每段分析生成的最大文本长度
 OUTPUT_JSON = "/kaggle/working/video_segments_summary.json"
@@ -17,6 +17,7 @@ TEST_SEGMENTS = None  # 只处理前N段用于测试，设为 None 处理全部
 VIDEO_FPS = 2  # 视频采样帧率
 VIDEO_SCALE = "640:-2"  # 缩小分辨率
 MIN_SEGMENT_DURATION = 1.0  # 最少有效时长
+OVERLAP_DURATION = 2  # 分段重叠时长(秒)，让模型保留上一段的视觉上下文
 
 ANALYSIS_PROMPT = """分析这段视频，提取实验相关信息：
 
@@ -128,7 +129,8 @@ duration_probe = subprocess.run(
 )
 duration = float(json.loads(duration_probe.stdout)["format"]["duration"])
 
-total_segments = int(duration / SEGMENT_DURATION) + (1 if duration % SEGMENT_DURATION > 0 else 0)
+effective_segment_duration = SEGMENT_DURATION - OVERLAP_DURATION
+total_segments = int((duration - OVERLAP_DURATION) / effective_segment_duration) + 1 if duration > SEGMENT_DURATION else 1
 if TEST_SEGMENTS:
     total_segments = min(total_segments, TEST_SEGMENTS)
 
@@ -144,7 +146,7 @@ os.makedirs(seg_dir, exist_ok=True)
 
 segment_paths = []
 for i in range(total_segments):
-    start = i * SEGMENT_DURATION
+    start = i * (SEGMENT_DURATION - OVERLAP_DURATION)
     actual_dur = get_segment_actual_duration(start, SEGMENT_DURATION, duration)
     if actual_dur < MIN_SEGMENT_DURATION:
         print(f"  Segment {i}: skipped (only {actual_dur:.1f}s)")
