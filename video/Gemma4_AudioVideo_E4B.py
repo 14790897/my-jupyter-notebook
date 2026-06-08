@@ -21,7 +21,7 @@ VIDEO_SCALE = "640:-2"  # 缩小分辨率
 MIN_SEGMENT_DURATION = 1.0  # 最少有效时长
 AUDIO_SAMPLE_RATE = 16000  # 音频采样率
 OVERLAP_DURATION = 2  # 分段重叠时长(秒)
-## TODO 右上角加时间戳
+## TODO:右上角加时间戳
 ANALYSIS_PROMPT = """描述这段视频中的实验内容、操作步骤、观察到的现象和数据。
 包括：
 - 实验目的和原理
