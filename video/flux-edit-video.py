@@ -18,6 +18,9 @@ OUTPUT_VIDEO = "/kaggle/working/liuhuaqiang-candy-world.mp4"
 
 TEST_MODE = True
 TEST_DURATION = 10
+START_TIME = 0  
+END_TIME = None  
+
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -29,11 +32,16 @@ total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 print(f"Video info: {width}x{height}, {fps} FPS, {total_frames} frames")
 
-if TEST_MODE:
-    max_frames = int(fps * TEST_DURATION)
-    print(f"Test mode enabled, processing first {TEST_DURATION} seconds ({max_frames} frames)")
+start_frame = int(START_TIME * fps)
+if END_TIME is None:
+    end_frame = total_frames
 else:
-    max_frames = total_frames
+    end_frame = min(int(END_TIME * fps), total_frames)
+
+max_frames = end_frame - start_frame
+print(f"Processing from {START_TIME}s to {END_TIME or 'end'}s ({max_frames} frames)")
+
+cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
 prompt = "keep the main subject person unchanged, transform background into candy world style, sweet colorful candy land, lollipops, candy canes, gumdrops, marshmallows, rainbow colors, whimsical fantasy background, vibrant sugary landscape, preserve foreground character"
 
