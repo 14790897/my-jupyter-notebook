@@ -82,13 +82,16 @@ for i in range(frame_count):
 out.release()
 
 print("正在使用 FFmpeg 合并音频与画面...")
+audio_start = f"-ss {START_TIME}" if START_TIME > 0 else ""
+audio_duration = f"-t {END_TIME - START_TIME}" if END_TIME else ""
 ffmpeg_cmd = (
     f"ffmpeg -y "
     f"-i {TEMP_VIDEO} "
-    f"-i {VIDEO_PATH} "
+    f"{audio_start} -i {VIDEO_PATH} "
     f"-map 0:v:0 -map 1:a:0 "
     f"-vcodec libx264 -preset ultrafast "
     f"-c:a copy -shortest "
+    f"{audio_duration} "
     f"{OUTPUT_VIDEO}"
 )
 os.system(ffmpeg_cmd)
