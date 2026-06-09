@@ -16,8 +16,6 @@ OUTPUT_DIR = "/kaggle/working/flux_candy_frames"
 TEMP_VIDEO = "/kaggle/working/liuhuaqiang-candy-world_temp.avi"
 OUTPUT_VIDEO = "/kaggle/working/liuhuaqiang-candy-world.mp4"
 
-TEST_MODE = True
-TEST_DURATION = 10
 START_TIME = 0  
 END_TIME = None  
 
