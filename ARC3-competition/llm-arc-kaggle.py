@@ -68,27 +68,43 @@ print("✅ Model loaded successfully!")
 # %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2026-06-13T04:47:05.366183Z","iopub.execute_input":"2026-06-13T04:47:05.366287Z","iopub.status.idle":"2026-06-13T04:47:46.014948Z","shell.execute_reply.started":"2026-06-13T04:47:05.366276Z","shell.execute_reply":"2026-06-13T04:47:46.014615Z"}}
 # Test Model Generation
 def test_model(prompt: str) -> str:
-    messages = [{"role": "user", "content": prompt}]
-    inputs = tokenizer.apply_chat_template(
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+    
+    text = tokenizer.apply_chat_template(
         messages,
+        tokenize=False,
         add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(DEVICE)
+        enable_thinking=True
+    )
+    model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
+    
     with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=4096,
-            temperature=0.2,
+        generated_ids = model.generate(
+            **model_inputs,
+            max_new_tokens=32768,
+            temperature=0.6,
             top_p=0.95,
-            top_k=50,
+            top_k=20,
             do_sample=True,
             pad_token_id=tokenizer.pad_token_id,
         )
-    generated_ids_trimmed = outputs[0][len(inputs["input_ids"][0]):]
-    response = tokenizer.decode(generated_ids_trimmed, skip_special_tokens=True)
-    return response.strip()
+    
+    output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+    
+    try:
+        index = len(output_ids) - output_ids[::-1].index(151668)
+    except ValueError:
+        index = 0
+    
+    thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
+    content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+    
+    print(f"thinking content: {thinking_content}")
+    print(f"content: {content}")
+    
+    return content
 
 # Test 1: Basic Reasoning
 print("\n=== Test 1: Basic Reasoning ===")
@@ -161,29 +177,40 @@ Available actions: MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT, INTERACT, PAINT
 
 What action should the agent take? Return only the action name.
 """
-        messages = [{"role": "user", "content": prompt}]
-        inputs = self.tokenizer.apply_chat_template(
+        
+        messages = [
+            {"role": "user", "content": prompt}
+        ]
+        
+        text = self.tokenizer.apply_chat_template(
             messages,
+            tokenize=False,
             add_generation_prompt=True,
-            tokenize=True,
-            return_dict=True,
-            return_tensors="pt",
-        ).to (DEVICE)
+            enable_thinking=True
+        )
+        model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        
         with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=264,
-                temperature=0.1,
+            generated_ids = self.model.generate(
+                **model_inputs,
+                max_new_tokens=256,
+                temperature=0.6,
                 top_p=0.95,
-                top_k=64,
+                top_k=20,
                 do_sample=True,
-                pad_token_id=tokenizer.pad_token_id,
-                repetition_penalty=1.2,
-                no_repeat_ngram_size=2,
+                pad_token_id=self.tokenizer.pad_token_id,
             )
-        generated_ids_trimmed = outputs[0][len(inputs["input_ids"][0]):]
-        response = self.tokenizer.decode(generated_ids_trimmed, skip_special_tokens=True)
-        return response.strip().split('\n')[0].split()[0].upper()
+        
+        output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+        
+        try:
+            index = len(output_ids) - output_ids[::-1].index(151668)
+        except ValueError:
+            index = 0
+        
+        content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
+        
+        return content.strip().split('\n')[0].split()[0].upper()
 
 # %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2026-06-13T04:47:46.019182Z","iopub.execute_input":"2026-06-13T04:47:46.019270Z","iopub.status.idle":"2026-06-13T04:47:56.186361Z","shell.execute_reply.started":"2026-06-13T04:47:46.019262Z","shell.execute_reply":"2026-06-13T04:47:56.186031Z"}}
 # Test Agent with Simulated ARC Tasks
