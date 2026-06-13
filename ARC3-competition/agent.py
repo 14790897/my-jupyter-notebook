@@ -131,6 +131,7 @@ class MyAgent(Agent):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.action_counter = 0
         if MyAgent._model is None:
             MyAgent._load_model()
 
