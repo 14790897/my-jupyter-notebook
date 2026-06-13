@@ -193,7 +193,7 @@ What action should the agent take? Return only the action name.
         with torch.no_grad():
             generated_ids = self.model.generate(
                 **model_inputs,
-                max_new_tokens=256,
+                max_new_tokens=32768,
                 temperature=0.6,
                 top_p=0.95,
                 top_k=20,
@@ -210,7 +210,10 @@ What action should the agent take? Return only the action name.
         
         content = self.tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
         
-        return content.strip().split('\n')[0].split()[0].upper()
+        for action in ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "INTERACT", "PAINT"]:
+            if action in content.upper():
+                return action
+        return "UNKNOWN"
 
 # %% [code]
 # Test Agent with Simulated ARC Tasks
