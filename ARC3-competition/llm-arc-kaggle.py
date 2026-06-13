@@ -76,7 +76,7 @@ def test_model(prompt: str) -> str:
         messages,
         tokenize=False,
         add_generation_prompt=True,
-        enable_thinking=True
+        enable_thinking=False
     )
     model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
     
@@ -162,7 +162,7 @@ class QwenArcAgent:
         self.model = model
         self.tokenizer = tokenizer
     
-    def analyze_frame(self, grid: List[List[int]], agent_pos: tuple, goal_pos: tuple) -> str:
+    def analyze_frame(self, grid: List[List[int]], agent_pos: tuple, goal_pos: tuple, task: str = "") -> str:
         grid_str = "\n".join("".join(str(c) for c in row) for row in grid)
         prompt = f"""
 ARC Game Analysis:
@@ -170,11 +170,20 @@ ARC Game Analysis:
 Grid:
 {grid_str}
 
+Grid legend:
+  1 = Agent
+  2 = Goal target
+  3 = Obstacle (blocked, must go around)
+  4, 5, ... = Colored cells (may need PAINT or INTERACT)
+
 Agent position: {agent_pos}
 Goal position: {goal_pos}
 
 Available actions: MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT, INTERACT, PAINT
 
+Task: {task}
+
+Move toward the goal, avoid obstacles (3), interact with colored cells as needed.
 What action should the agent take? Return only the action name.
 """
         
@@ -186,7 +195,7 @@ What action should the agent take? Return only the action name.
             messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=True
+            enable_thinking=False
         )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
         
@@ -229,7 +238,7 @@ grid1 = [
     [0,0,0,2,0],
     [0,0,0,0,0]
 ]
-action = agent.analyze_frame(grid1, (1,1), (3,3))
+action = agent.analyze_frame(grid1, (1,1), (3,3), task="Simple navigation: move the agent (1) to the goal (2)")
 print(f"Grid:\n{chr(10).join(''.join(str(c) for c in row) for row in grid1)}")
 print(f"Agent at (1,1), Goal at (3,3)")
 print(f"Recommended action: {action}")
@@ -243,7 +252,7 @@ grid2 = [
     [0,0,0,2,0],
     [0,0,0,0,0]
 ]
-action = agent.analyze_frame(grid2, (1,1), (3,3))
+action = agent.analyze_frame(grid2, (1,1), (3,3), task="Obstacle avoidance: navigate around obstacles (3) to reach the goal (2)")
 print(f"Grid:\n{chr(10).join(''.join(str(c) for c in row) for row in grid2)}")
 print(f"Agent at (1,1), Goal at (3,3), Obstacle: 3")
 print(f"Recommended action: {action}")
@@ -257,7 +266,7 @@ grid3 = [
     [0,0,0,5,0],
     [0,0,0,0,2]
 ]
-action = agent.analyze_frame(grid3, (1,1), (4,4))
+action = agent.analyze_frame(grid3, (1,1), (4,4), task="Color matching: collect or interact with colored cells (4, 5) on the way to the goal (2)")
 print(f"Grid:\n{chr(10).join(''.join(str(c) for c in row) for row in grid3)}")
 print(f"Agent at (1,1), Goal at (4,4), Colors: 4, 5")
 print(f"Recommended action: {action}")
