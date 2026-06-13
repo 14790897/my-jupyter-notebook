@@ -83,6 +83,7 @@ TARGET: x,y  (only if ACTION is CLICK)
                 top_p=0.95,
                 top_k=20,
                 do_sample=True,
+                repetition_penalty=1.1,
                 pad_token_id=self.tokenizer.pad_token_id,
             )
 

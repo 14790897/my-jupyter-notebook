@@ -88,22 +88,23 @@ def test_model(prompt: str) -> str:
             top_p=0.95,
             top_k=20,
             do_sample=True,
+            repetition_penalty=1.1,
             pad_token_id=tokenizer.pad_token_id,
         )
-    
+
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
-    
+
     try:
         index = len(output_ids) - output_ids[::-1].index(151668)
     except ValueError:
         index = 0
-    
+
     thinking_content = tokenizer.decode(output_ids[:index], skip_special_tokens=True).strip("\n")
     content = tokenizer.decode(output_ids[index:], skip_special_tokens=True).strip("\n")
-    
+
     print(f"thinking content: {thinking_content}")
     print(f"content: {content}")
-    
+
     return content
 
 # Test 1: Basic Reasoning
