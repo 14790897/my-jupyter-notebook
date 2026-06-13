@@ -35,7 +35,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 # Configuration
 # MODEL_PATH = "/kaggle/input/models/qwen-lm/qwen2.5/transformers/32b-instruct/1"
 # MODEL_PATH = "/kaggle/input/models/qwen-lm/qwen-3-5/transformers/qwen3.5-27b/1"
-MODEL_PATH = "/kaggle/input/models/google/gemma-4/transformers/gemma-4-31b-it/1"
+# MODEL_PATH = "/kaggle/input/models/google/gemma-4/transformers/gemma-4-31b-it/1"
+MODEL_PATH = "/kaggle/input/models/qwen-lm/qwen-3-5/transformers/qwen3.5-27b/1"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {DEVICE}")
 
@@ -67,17 +68,27 @@ print("✅ Model loaded successfully!")
 # %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2026-06-13T04:47:05.366183Z","iopub.execute_input":"2026-06-13T04:47:05.366287Z","iopub.status.idle":"2026-06-13T04:47:46.014948Z","shell.execute_reply.started":"2026-06-13T04:47:05.366276Z","shell.execute_reply":"2026-06-13T04:47:46.014615Z"}}
 # Test Model Generation
 def test_model(prompt: str) -> str:
-    inputs = tokenizer(prompt, return_tensors="pt").to(DEVICE)
+    messages = [{"role": "user", "content": prompt}]
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+    ).to(DEVICE)
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=4096,
-            temperature=0.7,
-            top_p=0.9,
+            temperature=0.2,
+            top_p=0.95,
+            top_k=50,
             do_sample=True,
-            pad_token_id=tokenizer.pad_token_id
+            pad_token_id=tokenizer.pad_token_id,
         )
-    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+    generated_ids_trimmed = outputs[0][len(inputs["input_ids"][0]):]
+    response = tokenizer.decode(generated_ids_trimmed, skip_special_tokens=True)
+    return response.strip()
 
 # Test 1: Basic Reasoning
 print("\n=== Test 1: Basic Reasoning ===")
@@ -150,17 +161,28 @@ Available actions: MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT, INTERACT, PAINT
 
 What action should the agent take? Return only the action name.
 """
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(DEVICE)
+        messages = [{"role": "user", "content": prompt}]
+        inputs = self.tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to (DEVICE)
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=64,
+                max_new_tokens=264,
                 temperature=0.1,
                 top_p=0.95,
+                top_k=64,
                 do_sample=True,
-                pad_token_id=tokenizer.pad_token_id
+                pad_token_id=tokenizer.pad_token_id,
+                repetition_penalty=1.2,
+                no_repeat_ngram_size=2,
             )
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        generated_ids_trimmed = outputs[0][len(inputs["input_ids"][0]):]
+        response = self.tokenizer.decode(generated_ids_trimmed, skip_special_tokens=True)
         return response.strip().split('\n')[0].split()[0].upper()
 
 # %% [code] {"jupyter":{"outputs_hidden":false},"execution":{"iopub.status.busy":"2026-06-13T04:47:46.019182Z","iopub.execute_input":"2026-06-13T04:47:46.019270Z","iopub.status.idle":"2026-06-13T04:47:56.186361Z","shell.execute_reply.started":"2026-06-13T04:47:46.019262Z","shell.execute_reply":"2026-06-13T04:47:56.186031Z"}}
