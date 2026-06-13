@@ -116,7 +116,7 @@ print("\n=== Test 2: ARC Game Analysis ===")
 arc_prompt = """
 Analyze this ARC game state and suggest the best action:
 
-Game Grid (10x10):
+Game Grid (10x10, 0=empty, 1=target block):
 0000000000
 0000000000
 0011100000
@@ -128,12 +128,15 @@ Game Grid (10x10):
 0000000000
 0000000000
 
-Agent position: (2, 2)
-Goal: Reach the center
-
+Agent position: (row=2, col=2) - standing on the top-left corner of the target block
+Goal: Move to the center cell of the 3x3 target block (coordinates: row=3, col=3)
 Available actions: MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT, INTERACT
 
-What is the best action? Explain your reasoning.
+Output format:
+Action: [ACTION_NAME]
+Reasoning: [your analysis]
+
+What is the best action?
 """
 result = test_model(arc_prompt)
 print(result)
