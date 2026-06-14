@@ -2,11 +2,36 @@
 !pip install --no-index --find-links \
     /kaggle/input/competitions/arc-prize-2026-arc-agi-3/arc_agi_3_wheels \
     arc-agi python-dotenv
-
+# %% [code]
+!rm -rf /usr/local/lib/python3.12/dist-packages/PIL
+!rm -rf /usr/local/lib/python3.12/dist-packages/Pillow-*.dist-info
 # %% [code]
 !pip install --no-index --find-links=/kaggle/input/datasets/liuweiq/5-10-2-transformers-offline/offline_packages transformers -U -q
 !pip install --no-index --find-links=/kaggle/input/datasets/liuweiq/5-10-2-transformers-offline/offline_packages Pillow --force-reinstall -q
-
+# 2. 清除PIL缓存，无需重启内核即可加载新版
+import sys
+for k in list(sys.modules):
+    if k.startswith("PIL"):
+        del sys.modules[k]
+# %% [code]
+# MODEL_PATH = "/kaggle/input/models/qwen-lm/qwen-3-5/transformers/qwen3.5-27b/1"
+# import torch
+# import random
+# from typing import Any, List
+# from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+# tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+# if tokenizer.pad_token is None:
+#     tokenizer.pad_token = tokenizer.eos_token
+# model = AutoModelForCausalLM.from_pretrained(
+#     MODEL_PATH,
+#     torch_dtype=torch.bfloat16,
+#     # quantization_config=bnb_config,
+#     device_map="auto",
+#     trust_remote_code=True,
+#     # attn_implementation="flash_attention_2",
+#     low_cpu_mem_usage=True
+# )
+# print("✅ Model loaded successfully!")
 # %% [code]
 %%writefile /kaggle/working/my_agent.py
 import os
