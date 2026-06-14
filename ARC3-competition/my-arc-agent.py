@@ -101,7 +101,7 @@ TARGET: x,y  (only if ACTION is CLICK)
 class MyAgent(Agent):
     """Qwen3.5-powered agent for ARC-AGI-3 competition."""
 
-    MAX_ACTIONS = 80
+    MAX_ACTIONS = float("inf")  # 跨 sub-level 累加会提前结束；用 inf + 8h 超时
 
     _model = None
     _tokenizer = None
@@ -131,52 +131,61 @@ class MyAgent(Agent):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.action_counter = 0
         if MyAgent._model is None:
             MyAgent._load_model()
 
     def is_done(self, frames: list[FrameData], latest_frame: FrameData) -> bool:
-        return latest_frame.state is GameState.WIN or self.action_counter >= self.MAX_ACTIONS
+        # 不再用 action_counter 截止；WIN 由 gateway 决定
+        return latest_frame.state is GameState.WIN
 
     def choose_action(self, frames: list[FrameData], latest_frame: FrameData) -> GameAction:
-        if latest_frame.state in [GameState.NOT_PLAYED, GameState.GAME_OVER]:
-            action = GameAction.RESET
-            action.reasoning = f"State is {latest_frame.state}, resetting"
+        try:
+            if latest_frame.state in [GameState.NOT_PLAYED, GameState.GAME_OVER]:
+                action = GameAction.RESET
+                action.reasoning = f"State is {latest_frame.state}, resetting"
+                return action
+
+            # Extract first layer grid from frame data
+            if latest_frame.frame and len(latest_frame.frame) > 0:
+                grid = latest_frame.frame[0]
+            else:
+                grid = [[]]
+
+            available = latest_frame.available_actions if latest_frame.available_actions else [1, 2, 3, 4, 5]
+
+            content = MyAgent._qwen_agent.analyze_frame(grid, available)
+
+            # Parse action from LLM output
+            action_name = None
+            for name in ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "INTERACT", "PAINT", "CLICK", "UNDO", "RESET"]:
+                if name in content.upper():
+                    action_name = name
+                    break
+
+            if action_name is None:
+                action_name = "MOVE_UP"  # fallback
+
+            action = QwenArcAgent.ACTION_MAP.get(action_name, GameAction.ACTION1)
+
+            if action.is_complex():
+                coords = self._extract_coordinates(content)
+                action.set_data({"x": coords[0], "y": coords[1]})
+                action.reasoning = {
+                    "desired_action": f"{action.value}",
+                    "my_reason": content.strip()[:200],
+                }
+            else:
+                action.reasoning = content.strip()[:200]
+
             return action
-
-        # Extract first layer grid from frame data
-        if latest_frame.frame and len(latest_frame.frame) > 0:
-            grid = latest_frame.frame[0]
-        else:
-            grid = [[]]
-
-        available = latest_frame.available_actions if latest_frame.available_actions else [1, 2, 3, 4, 5]
-
-        content = MyAgent._qwen_agent.analyze_frame(grid, available)
-
-        # Parse action from LLM output
-        action_name = None
-        for name in ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "INTERACT", "PAINT", "CLICK", "UNDO", "RESET"]:
-            if name in content.upper():
-                action_name = name
-                break
-
-        if action_name is None:
-            action_name = "MOVE_UP"  # fallback
-
-        action = QwenArcAgent.ACTION_MAP.get(action_name, GameAction.ACTION1)
-
-        if action.is_complex():
-            coords = self._extract_coordinates(content)
-            action.set_data({"x": coords[0], "y": coords[1]})
-            action.reasoning = {
-                "desired_action": f"{action.value}",
-                "my_reason": content.strip()[:200],
-            }
-        else:
-            action.reasoning = content.strip()[:200]
-
-        return action
+        except Exception as e:
+            # 任何单步异常都兜住，循环 MOVE，避免整个 run 死掉
+            import random
+            fb = [GameAction.ACTION1, GameAction.ACTION2, GameAction.ACTION3,
+                  GameAction.ACTION4, GameAction.ACTION5][self.action_counter % 5]
+            self.action_counter += 1
+            fb.reasoning = f"Step-level fallback: {type(e).__name__}: {str(e)[:80]}"
+            return fb
 
     @staticmethod
     def _extract_coordinates(content: str):
