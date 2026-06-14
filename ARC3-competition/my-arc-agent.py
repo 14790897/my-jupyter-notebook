@@ -1,4 +1,4 @@
-# %% [code] {"_kg_hide-output":true,"execution":{"iopub.execute_input":"2026-03-23T16:17:49.6057Z","iopub.status.busy":"2026-03-23T16:17:49.605293Z","iopub.status.idle":"2026-03-23T16:17:54.988552Z","shell.execute_reply":"2026-03-23T16:17:54.987628Z","shell.execute_reply.started":"2026-03-23T16:17:49.605651Z"}}
+# %% [code]
 !pip install --no-index --find-links \
     /kaggle/input/competitions/arc-prize-2026-arc-agi-3/arc_agi_3_wheels \
     arc-agi python-dotenv
@@ -7,7 +7,7 @@
 !pip install --no-index --find-links=/kaggle/input/datasets/liuweiq/5-10-2-transformers-offline/offline_packages transformers -U -q
 !pip install --no-index --find-links=/kaggle/input/datasets/liuweiq/5-10-2-transformers-offline/offline_packages Pillow --force-reinstall -q
 
-# %% [code] {"execution":{"iopub.execute_input":"2026-03-23T16:18:20.267821Z","iopub.status.busy":"2026-03-23T16:18:20.267475Z","iopub.status.idle":"2026-03-23T16:18:20.275097Z","shell.execute_reply":"2026-03-23T16:18:20.274277Z","shell.execute_reply.started":"2026-03-23T16:18:20.267789Z"}}
+# %% [code]
 %%writefile /kaggle/working/my_agent.py
 import os
 import re
