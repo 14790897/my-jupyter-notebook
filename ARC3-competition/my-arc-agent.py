@@ -233,6 +233,44 @@ class MyAgent(Agent):
         return (0, 0)
 
     @staticmethod
+    def _find_balanced_json(content: str) -> str | None:
+        """Find a balanced JSON object containing "action" key in text."""
+        # Locate the start of a JSON object that has "action"
+        start = content.find('{"action"')
+        if start == -1:
+            start = content.find('{ "action"')
+        if start == -1:
+            start_match = re.search(r'\{\s*"action"\s*:', content)
+            if start_match:
+                start = start_match.start()
+        if start == -1:
+            return None
+
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(content)):
+            ch = content[i]
+            if escape:
+                escape = False
+                continue
+            if ch == '\\':
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return content[start:i + 1]
+        return None
+
+    @staticmethod
     def _parse_json_response(content: str) -> dict:
         """Extract and parse JSON from LLM response. Falls back to regex if JSON parsing fails."""
         # Try to find JSON block in markdown ```json ... ``` fences
@@ -243,11 +281,11 @@ class MyAgent(Agent):
             except json.JSONDecodeError:
                 pass
 
-        # Try to find a bare JSON object in the response
-        json_match = re.search(r'\{[^{}]*"action"\s*:\s*"[^"]+"[^{}]*\}', content, re.DOTALL)
+        # Try to find a bare JSON object with balanced braces
+        json_match = MyAgent._find_balanced_json(content)
         if json_match:
             try:
-                return json.loads(json_match.group(0))
+                return json.loads(json_match)
             except json.JSONDecodeError:
                 pass
 
