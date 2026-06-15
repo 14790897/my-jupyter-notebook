@@ -34,6 +34,7 @@ for k in list(sys.modules):
 # print("✅ Model loaded successfully!")
 # %% [code]
 %%writefile /kaggle/working/my_agent.py
+import json
 import os
 import re
 import torch
@@ -82,10 +83,18 @@ Observe the grid pattern and recent changes to understand the game mechanics.
 Available actions:
 {chr(10).join(action_names)}
 
-Choose the best action. If using ACTION6 (CLICK), also specify target coordinates.
-Respond in this exact format:
-ACTION: <action_name>
-TARGET: x,y  (only if ACTION is CLICK)
+First, analyze the grid: identify the agent position, goal position, obstacles, and any patterns or mechanics. Then decide the best action. If using ACTION6 (CLICK), also specify target coordinates.
+
+At the end of your response, output a JSON object in this exact format:
+```json
+{{
+  "action": "<ACTION_NAME>",
+  "target": {{"x": <int>, "y": <int>}},
+  "reasoning": "<brief summary>"
+}}
+```
+- "action" must be one of: {", ".join(name for _, name in sorted({1: "MOVE_UP", 2: "MOVE_DOWN", 3: "MOVE_LEFT", 4: "MOVE_RIGHT", 5: "INTERACT", 6: "CLICK", 7: "UNDO"}.items()))}
+- "target" is required only when action is CLICK, otherwise omit it.
 """
 
         messages = [
@@ -180,27 +189,23 @@ class MyAgent(Agent):
 
             content = MyAgent._qwen_agent.analyze_frame(grid, available)
 
-            # Parse action from LLM output
-            action_name = None
-            for name in ["MOVE_UP", "MOVE_DOWN", "MOVE_LEFT", "MOVE_RIGHT", "INTERACT", "PAINT", "CLICK", "UNDO", "RESET"]:
-                if name in content.upper():
-                    action_name = name
-                    break
+            # Extract JSON from LLM output and parse action
+            parsed = self._parse_json_response(content)
 
-            if action_name is None:
-                action_name = "MOVE_UP"  # fallback
-
+            action_name = parsed.get("action", "MOVE_UP")
             action = QwenArcAgent.ACTION_MAP.get(action_name, GameAction.ACTION1)
 
             if action.is_complex():
-                coords = self._extract_coordinates(content)
-                action.set_data({"x": coords[0], "y": coords[1]})
+                target = parsed.get("target", {})
+                x = max(0, min(63, int(target.get("x", 0))))
+                y = max(0, min(63, int(target.get("y", 0))))
+                action.set_data({"x": x, "y": y})
                 action.reasoning = {
                     "desired_action": f"{action.value}",
-                    "my_reason": content.strip()[:200],
+                    "my_reason": parsed.get("reasoning", content.strip()[:200]),
                 }
             else:
-                action.reasoning = content.strip()[:200]
+                action.reasoning = parsed.get("reasoning", content.strip()[:200])
 
             return action
         except Exception as e:
@@ -226,6 +231,35 @@ class MyAgent(Agent):
                 x, y = int(m.group(1)), int(m.group(2))
                 return (max(0, min(63, x)), max(0, min(63, y)))
         return (0, 0)
+
+    @staticmethod
+    def _parse_json_response(content: str) -> dict:
+        """Extract and parse JSON from LLM response. Falls back to regex if JSON parsing fails."""
+        # Try to find JSON block in markdown ```json ... ``` fences
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # Try to find a bare JSON object in the response
+        json_match = re.search(r'\{[^{}]*"action"\s*:\s*"[^"]+"[^{}]*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback: regex extraction from non-JSON text
+        action_match = re.search(r'ACTION:\s*(\w+)', content, re.IGNORECASE)
+        action_name = action_match.group(1).upper() if action_match else "MOVE_UP"
+        coords = MyAgent._extract_coordinates(content)
+        return {
+            "action": action_name,
+            "target": {"x": coords[0], "y": coords[1]} if coords != (0, 0) else {},
+            "reasoning": content.strip()[:200],
+        }
 
 # %% [code]
 import os
