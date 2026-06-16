@@ -23,7 +23,7 @@ OVERLAP_DURATION = 2  # 分段重叠时长(秒)，让模型保留上一段的视
 # === 全局感知配置（5分钟片段，低帧率，大感受野） ===
 GLOBAL_SEGMENT_DURATION = 300  # 全局感知分段时长(秒)，5分钟感受野
 GLOBAL_VIDEO_FPS = 0.5  # 全局感知采样帧率，低于精细分析以控制上下文长度
-GLOBAL_SCALE = "480:-2"  # 全局感知分辨率，更低以减少token消耗
+GLOBAL_SCALE = "640:-2"  # 全局感知分辨率
 GLOBAL_OVERLAP = 5  # 全局分段重叠(秒)
 
 ANALYSIS_PROMPT = """分析这段视频，提取实验相关信息：
